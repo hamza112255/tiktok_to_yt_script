@@ -1,0 +1,18 @@
+# Ignore local files
+downloaded_videos/
+youtube_ready/
+__pycache__/
+*.pyc
+*.log
+
+# Ignore credentials (will be set as environment variables)
+client_secret.json
+token.json
+config.json
+
+# Ignore large model files
+yolov8n.pt
+
+# Ignore tracking files
+downloaded_videos.json
+video_urls.txt

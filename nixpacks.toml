@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["python39", "ffmpeg", "libGL"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python tiktok_to_youtube.py"
