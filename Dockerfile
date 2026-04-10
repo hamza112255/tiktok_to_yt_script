@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements-railway.txt
 
 # Copy application files
 COPY tiktok_to_youtube.py .
-COPY video_processor.py .
+COPY video_processor_lite.py video_processor.py
 COPY railway_setup.py .
 COPY .gitignore .
 
