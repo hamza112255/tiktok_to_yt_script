@@ -118,6 +118,7 @@ def load_config():
                 "shorts_folder": "youtube_ready/shorts",
                 "main_videos_folder": "youtube_ready/main",
                 "auto_organize": True,
+                "organize_by_date": False,
                 "auto_upload_to_youtube": False,
                 "always_prompt_account": False,
                 "title_suffix": " | TikTok",
@@ -125,15 +126,25 @@ def load_config():
                 "skip_copyrighted": True,
                 "skip_non_original_audio": True,
                 "copyright_keywords": ["copyright", "all rights reserved", "(c)"],
+                "copyright_risk_action": "skip",
+                "copyright_risk_privacy": "private",
                 "upload_as_shorts": True,
                 "video_privacy": "private",
                 "default_title_prefix": "",
-                "default_description": "#shorts #tiktok"
+                "default_description": "#shorts #tiktok",
+                "add_watermark": False,
+                "watermark_text": "Lahori Twins",
+                "skip_female_videos": False,
+                "split_long_videos": False,
+                "split_duration_seconds": 30,
+                "min_segment_duration_seconds": 20
             },
             "download_settings": {
                 "video_quality": "high",
                 "remove_watermark": True,
-                "save_video_info": True
+                "save_video_info": True,
+                "download_latest_only": True,
+                "max_videos_per_check": 1
             },
             "notifications": {
                 "show_download_progress": True,
@@ -261,7 +272,7 @@ class YouTubeUploader:
             print(f"✗ YouTube authentication failed: {e}")
             self.enabled = False
     
-    def upload_video(self, video_path, title, description):
+    def upload_video(self, video_path, title, description, privacy=None):
         """Upload video to YouTube"""
         if not self.enabled or not self.youtube:
             return False
@@ -270,7 +281,7 @@ class YouTubeUploader:
             print(f"→ Uploading to YouTube: {video_path.name}")
             
             # Prepare video metadata
-            privacy = self.config['youtube_settings'].get('video_privacy', 'private')
+            privacy = privacy or self.config['youtube_settings'].get('video_privacy', 'private')
             is_shorts = self.config['youtube_settings'].get('upload_as_shorts', True)
             
             # Add #Shorts to title if uploading as Shorts
@@ -529,23 +540,28 @@ class TikTokToYouTube:
         
         return "\n\n".join(p for p in parts if p).strip()
     
-    def _should_skip_upload(self, metadata):
-        if not self.config['youtube_settings'].get('skip_copyrighted', False):
-            return False, None
+    def _get_upload_decision(self, metadata):
+        default_privacy = self.config['youtube_settings'].get('video_privacy', 'private')
+        risk_action = str(self.config['youtube_settings'].get('copyright_risk_action', 'skip')).lower()
+        risk_privacy = self.config['youtube_settings'].get('copyright_risk_privacy', 'private')
         
         caption = (metadata or {}).get('caption', '') or ""
         caption_lower = caption.lower()
         keywords = self.config['youtube_settings'].get('copyright_keywords', [])
         for keyword in keywords:
-            if keyword and keyword.lower() in caption_lower:
-                return True, f"keyword '{keyword}'"
+            if keyword and keyword.lower() in caption_lower and self.config['youtube_settings'].get('skip_copyrighted', False):
+                if risk_action == 'private':
+                    return True, risk_privacy, f"keyword '{keyword}'"
+                return False, None, f"keyword '{keyword}'"
         
         if self.config['youtube_settings'].get('skip_non_original_audio', False):
             audio = (metadata or {}).get('audio', '') or ""
             if audio and "original sound" not in audio.lower():
-                return True, "non-original audio"
+                if risk_action == 'private':
+                    return True, risk_privacy, "non-original audio"
+                return False, None, "non-original audio"
         
-        return False, None
+        return True, default_privacy, None
     
     def _skip_upload(self, video_path, reason):
         skip_root = resolve_path(self.config['youtube_settings'].get(
@@ -778,12 +794,14 @@ class TikTokToYouTube:
                 else:
                     title, description, meta = self._build_upload_metadata(video_file)
                 
-                skip, reason = self._should_skip_upload(meta)
-                if skip:
+                should_upload, privacy, reason = self._get_upload_decision(meta)
+                if not should_upload:
                     self._skip_upload(video_file, reason)
                     continue
+                if reason:
+                    print(f"-> Upload policy match ({reason}). Uploading as {privacy}.")
                 
-                success = self.youtube_uploader.upload_video(video_file, title, description)
+                success = self.youtube_uploader.upload_video(video_file, title, description, privacy=privacy)
                 if not success:
                     print("⚠ Pending upload failed; will retry on next check.")
                     break
@@ -980,11 +998,13 @@ class TikTokToYouTube:
                     else:
                         title, description, meta = self._build_upload_metadata(video_file, metadata)
                     
-                    skip, reason = self._should_skip_upload(meta)
-                    if skip:
+                    should_upload, privacy, reason = self._get_upload_decision(meta)
+                    if not should_upload:
                         self._skip_upload(video_file, reason)
                     else:
-                        uploaded = self.youtube_uploader.upload_video(video_file, title, description)
+                        if reason:
+                            print(f"-> Upload policy match ({reason}). Uploading as {privacy}.")
+                        uploaded = self.youtube_uploader.upload_video(video_file, title, description, privacy=privacy)
                         if uploaded:
                             self._cleanup_uploaded_video(video_file)
             
@@ -1260,11 +1280,13 @@ class TikTokToYouTube:
                     else:
                         title, description, meta = self._build_upload_metadata(video_file, metadata)
                     
-                    skip, reason = self._should_skip_upload(meta)
-                    if skip:
+                    should_upload, privacy, reason = self._get_upload_decision(meta)
+                    if not should_upload:
                         self._skip_upload(video_file, reason)
                     else:
-                        uploaded = self.youtube_uploader.upload_video(video_file, title, description)
+                        if reason:
+                            print(f"-> Upload policy match ({reason}). Uploading as {privacy}.")
+                        uploaded = self.youtube_uploader.upload_video(video_file, title, description, privacy=privacy)
                         if uploaded:
                             self._cleanup_uploaded_video(video_file)
             

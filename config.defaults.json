@@ -1,0 +1,51 @@
+{
+  "tiktok_username": ".rajabbut_555",
+  "check_interval_minutes": 5,
+  "download_settings": {
+    "video_quality": "high",
+    "remove_watermark": true,
+    "save_video_info": true,
+    "download_latest_only": true,
+    "max_videos_per_check": 1
+  },
+  "youtube_settings": {
+    "channel_name": "Lahori Twins",
+    "channel_id": "",
+    "shorts_folder": "youtube_ready/shorts",
+    "main_videos_folder": "youtube_ready/main",
+    "auto_organize": true,
+    "organize_by_date": true,
+    "auto_upload_to_youtube": true,
+    "always_prompt_account": false,
+    "title_suffix": " | TikTok",
+    "use_tiktok_hashtags": false,
+    "skip_copyrighted": true,
+    "skip_non_original_audio": true,
+    "copyright_keywords": [
+      "copyright",
+      "all rights reserved",
+      "(c)"
+    ],
+    "copyright_risk_action": "private",
+    "copyright_risk_privacy": "private",
+    "upload_as_shorts": true,
+    "video_privacy": "public",
+    "default_title_prefix": "",
+    "default_description": "#fyp #trending #viral #rajabfamily #rajab #rajabbutt #viralshorts #maandogarlive #maandogar #shezi #haidershah #haiderlive #rajabvlog #jahangir",
+    "add_watermark": true,
+    "watermark_text": "Lahori Twins",
+    "skip_female_videos": true,
+    "split_long_videos": true,
+    "split_duration_seconds": 34,
+    "min_segment_duration_seconds": 20
+  },
+  "notifications": {
+    "show_download_progress": true,
+    "play_sound_on_new_video": false
+  },
+  "auto_restart": {
+    "enabled": true,
+    "restart_on_error": true,
+    "max_retries": 999999
+  }
+}
