@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["python310", "ffmpeg"]
-
-[phases.install]
-cmds = ["pip install --upgrade pip", "pip install -r requirements-railway.txt"]
-
-[start]
-cmd = "python railway_setup.py && python tiktok_to_youtube.py"

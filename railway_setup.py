@@ -57,7 +57,7 @@ def setup_credentials():
             "default_description": "#shorts #tiktok",
             "add_watermark": os.getenv('ADD_WATERMARK', 'false').lower() == 'true',
             "watermark_text": os.getenv('WATERMARK_TEXT', 'Lahori Twins'),
-            "skip_female_videos": os.getenv('SKIP_FEMALE_VIDEOS', 'false').lower() == 'true',
+            "skip_female_videos": False,  # Disabled on Railway (requires heavy AI models)
             "split_long_videos": os.getenv('SPLIT_LONG_VIDEOS', 'false').lower() == 'true',
             "split_duration_seconds": int(os.getenv('SPLIT_DURATION_SECONDS', '30')),
             "min_segment_duration_seconds": int(os.getenv('MIN_SEGMENT_DURATION_SECONDS', '20'))
