@@ -140,6 +140,9 @@ def load_config():
         print(f"✗ Error reading config file: {e}")
         return None
 
+print("DEBUG: Defining YouTubeUploader class...")
+sys.stdout.flush()
+
 class YouTubeUploader:
     """Handle YouTube uploads"""
     
@@ -285,6 +288,9 @@ class YouTubeUploader:
         except Exception as e:
             print(f"✗ YouTube upload failed: {e}")
             return False
+
+print("DEBUG: Defining TikTokToYouTube class...")
+sys.stdout.flush()
 
 class TikTokToYouTube:
     def __init__(self, config):
@@ -1329,12 +1335,21 @@ class TikTokToYouTube:
                     break
 
 if __name__ == "__main__":
+    print("DEBUG: Reached main entry point")
+    sys.stdout.flush()
+    
     print("\n" + "="*60)
     print("TikTok to YouTube - Starting...")
     print("="*60 + "\n")
     
+    print("DEBUG: Loading configuration...")
+    sys.stdout.flush()
+    
     # Load configuration
     config = load_config()
+    
+    print("DEBUG: Configuration loaded")
+    sys.stdout.flush()
     
     if not config:
         print("✗ Failed to load configuration. Exiting...")
