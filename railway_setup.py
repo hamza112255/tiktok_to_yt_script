@@ -7,6 +7,9 @@ import base64
 import json
 from pathlib import Path
 
+# Check if we have a persistent volume mounted
+DATA_DIR = Path('/app/data') if Path('/app/data').exists() else Path('.')
+
 def setup_credentials():
     """Decode base64 credentials from environment variables"""
     
