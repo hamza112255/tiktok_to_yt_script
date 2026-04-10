@@ -81,3 +81,6 @@ if __name__ == '__main__':
     print("→ Setting up Railway environment...")
     setup_credentials()
     print("✓ Railway setup complete")
+    print("→ Starting main script...")
+    import sys
+    sys.stdout.flush()

@@ -7,6 +7,9 @@ from datetime import datetime
 import subprocess
 from pathlib import Path
 
+print("DEBUG: Starting imports...")
+sys.stdout.flush()
+
 # Fix Windows console encoding for Unicode characters
 if sys.platform == 'win32':
     try:
@@ -17,17 +20,26 @@ if sys.platform == 'win32':
     # Set environment variable for subprocess
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
+print("DEBUG: Importing video processor...")
+sys.stdout.flush()
+
 # Import video processor
 try:
     from video_processor import VideoProcessor
     VIDEO_PROCESSOR_AVAILABLE = True
-except ImportError:
+    print("DEBUG: Video processor imported successfully")
+except ImportError as e:
     VIDEO_PROCESSOR_AVAILABLE = False
-    print("Warning: Video processor not available. Install: pip install opencv-python ultralytics")
+    print(f"Warning: Video processor not available: {e}")
+
+sys.stdout.flush()
 
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.m4v', '.mkv', '.webm'}
 
 BASE_DIR = Path(__file__).resolve().parent
+
+print("DEBUG: Importing YouTube API libraries...")
+sys.stdout.flush()
 
 def run_command(cmd, timeout=None):
     """Run subprocess command with proper UTF-8 encoding"""
@@ -53,6 +65,9 @@ def resolve_path(path_value):
     path = Path(path_value)
     return path if path.is_absolute() else (BASE_DIR / path)
 
+print("DEBUG: Importing YouTube API libraries...")
+sys.stdout.flush()
+
 # YouTube API imports
 try:
     from google.oauth2.credentials import Credentials
@@ -61,8 +76,15 @@ try:
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
     YOUTUBE_API_AVAILABLE = True
+    print("DEBUG: YouTube API libraries imported successfully")
 except ImportError:
     YOUTUBE_API_AVAILABLE = False
+    print("DEBUG: YouTube API libraries not available")
+
+sys.stdout.flush()
+
+print("DEBUG: Defining load_config function...")
+sys.stdout.flush()
 
 def load_config():
     """Load configuration from config.json file"""
