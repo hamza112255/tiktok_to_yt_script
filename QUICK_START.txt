@@ -1,0 +1,83 @@
+============================================================
+ QUICK START - New Features
+============================================================
+
+THREE NEW FEATURES ADDED:
+1. ✅ Watermark "Lahori Twins" on all videos
+2. ✅ Skip videos with people detected
+3. ✅ Split long videos into 30-second shorts
+
+============================================================
+QUICK INSTALL (Windows)
+============================================================
+
+1. Install FFmpeg:
+   - Download: https://www.gyan.dev/ffmpeg/builds/
+   - Extract to C:\ffmpeg
+   - Add C:\ffmpeg\bin to PATH
+   - Restart Command Prompt
+
+2. Install Python packages:
+   pip install -r requirements.txt
+
+3. Test:
+   python tiktok_to_youtube.py
+
+Done! 🎉
+
+============================================================
+QUICK INSTALL (Oracle Cloud)
+============================================================
+
+1. SSH into VM:
+   ssh -i oracle-ssh-key.key ubuntu@YOUR_IP
+
+2. Install FFmpeg:
+   sudo apt update
+   sudo apt install ffmpeg -y
+
+3. Upload new files:
+   (From Windows PowerShell)
+   scp -i oracle-ssh-key.key tiktok_to_youtube.py ubuntu@YOUR_IP:~/tiktok-youtube/
+   scp -i oracle-ssh-key.key config.json ubuntu@YOUR_IP:~/tiktok-youtube/
+   scp -i oracle-ssh-key.key video_processor.py ubuntu@YOUR_IP:~/tiktok-youtube/
+   scp -i oracle-ssh-key.key requirements.txt ubuntu@YOUR_IP:~/tiktok-youtube/
+
+4. Install packages:
+   cd ~/tiktok-youtube
+   pip3 install -r requirements.txt
+
+5. Restart service:
+   sudo systemctl restart tiktok-youtube
+   sudo journalctl -u tiktok-youtube -f
+
+Done! 🎉
+
+============================================================
+CONFIGURATION
+============================================================
+
+Already configured in config.json:
+- add_watermark: true
+- watermark_text: "Lahori Twins"
+- skip_female_videos: true
+- split_long_videos: true
+- split_duration_seconds: 30
+
+No changes needed!
+
+============================================================
+WHAT HAPPENS NOW
+============================================================
+
+Every video will:
+1. Be checked for people (skip if detected)
+2. Get "Lahori Twins" watermark added
+3. Be split into 30-second parts if longer
+4. Upload each part to YouTube automatically
+
+Example:
+- 90-second video → Split into 3 parts (30s each)
+- Uploaded as: "Video Title (Part 1/3)", "Video Title (Part 2/3)", etc.
+
+============================================================

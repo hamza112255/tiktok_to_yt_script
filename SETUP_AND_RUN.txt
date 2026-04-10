@@ -1,0 +1,161 @@
+============================================================
+ TikTok to YouTube - Setup & Run (Windows)
+============================================================
+
+This project can:
+- Download TikTok videos (auto-check a profile OR via manual URLs)
+- Upload them to YouTube automatically
+- Upload any old videos already in the folder first, then delete them after upload
+
+------------------------------------------------------------
+1) What you need
+------------------------------------------------------------
+
+- Windows 10/11
+- Internet connection
+- A Google account that has permission to upload to the YouTube channel
+  (If it’s a Brand Account channel: YouTube Studio → Settings → Permissions)
+
+------------------------------------------------------------
+2) Install Python (only once)
+------------------------------------------------------------
+
+1. Download Python 3 from: https://www.python.org/downloads/
+2. IMPORTANT: during install, tick "Add Python to PATH"
+3. After install, open Command Prompt and run:
+     python --version
+
+------------------------------------------------------------
+3) Put this folder somewhere permanent
+------------------------------------------------------------
+
+Example: C:\TikTokToYouTube\
+
+------------------------------------------------------------
+4) Configure the script (config.json)
+------------------------------------------------------------
+
+Open "config.json" and set:
+- tiktok_username
+- youtube_settings.auto_upload_to_youtube = true
+- youtube_settings.video_privacy = private / unlisted / public
+- youtube_settings.always_prompt_account = true (optional; choose Google account each run)
+- youtube_settings.title_suffix = " | TikTok" (adds a small change to the title)
+- youtube_settings.use_tiktok_hashtags = false (do not reuse TikTok hashtags)
+- youtube_settings.skip_copyrighted = true (skip uploads if copyright is detected)
+- youtube_settings.skip_non_original_audio = true (skip if audio is not "original sound")
+- download_settings.download_latest_only = true
+- download_settings.max_videos_per_check = how many newest videos to try per check
+- check_interval_minutes = how often to check
+
+NOTE:
+"youtube_settings.channel_name" is only used for local folder naming.
+The upload goes to whatever YouTube channel your Google account is allowed to upload to.
+
+------------------------------------------------------------
+5) One-time YouTube OAuth setup (required for auto-upload)
+------------------------------------------------------------
+
+Google requires a one-time approval in a browser. After that, the script stores a
+"token.json" file and runs without asking again.
+
+5.1 Create/Select a Google Cloud project
+  - https://console.cloud.google.com/
+
+5.2 Enable "YouTube Data API v3"
+  - APIs & Services → Library → search "YouTube Data API v3" → Enable
+
+5.3 Configure OAuth consent screen
+  - APIs & Services → OAuth consent screen
+  - User type: External
+  - Add your email in "Test users" (or publish to Production)
+
+IMPORTANT (automation):
+If your consent screen stays in "Testing", Google may expire refresh tokens after ~7 days,
+which means you’ll need to authorize again. For always-on automation, set it to Production.
+
+5.4 Create OAuth client credentials (DESKTOP APP)
+  - APIs & Services → Credentials → Create Credentials → OAuth client ID
+  - Application type: Desktop app
+  - Download the JSON
+  - Save/rename it to: client_secret.json
+  - Put client_secret.json in the SAME folder as tiktok_to_youtube.py
+
+If you see "redirect_uri_mismatch":
+You created a Web client. Delete it and create a Desktop app client instead.
+
+------------------------------------------------------------
+6) Run (auto-installs dependencies)
+------------------------------------------------------------
+
+Double-click:
+  run_forever.bat
+
+First run will open a browser (or show a code) to authorize YouTube upload.
+Sign in with the Google account that can upload to your channel and click Allow.
+
+After that, token.json is created and future runs are automatic.
+To switch accounts once, delete token.json and run again.
+
+------------------------------------------------------------
+7) How to download TikToks
+------------------------------------------------------------
+
+Method A (automatic profile check):
+- The script uses yt-dlp to fetch the newest videos from:
+    https://www.tiktok.com/@<tiktok_username>
+- TikTok may block automated requests sometimes.
+
+Method B (recommended - manual URLs):
+1) Open "video_urls.txt"
+2) Paste TikTok video links (one per line), for example:
+   https://www.tiktok.com/@username/video/1234567890
+3) Save the file
+4) The script will download + upload them automatically
+5) Remove or comment out the URLs after they are processed
+
+Optional (helps if TikTok blocks you):
+- Update yt-dlp:
+    python -m pip install --upgrade yt-dlp
+- Use a VPN
+- Export browser cookies to "cookies.txt" and place it next to the script
+  (the script will automatically use cookies.txt if it exists)
+
+------------------------------------------------------------
+8) Upload behavior (important)
+------------------------------------------------------------
+
+Every check cycle:
+1) Uploads any existing video files already in youtube_ready (oldest first)
+2) Deletes uploaded files (and matching *_info.txt) after a successful upload
+3) Checks TikTok for new videos and processes them
+
+This ensures old videos in the folder are uploaded first, then new videos.
+
+------------------------------------------------------------
+9) Important files
+------------------------------------------------------------
+
+- tiktok_to_youtube.py        Main script
+- run_forever.bat             Runs forever + auto-restarts
+- requirements.txt            Python dependencies
+- config.json                 Your settings
+- client_secret.json          OAuth credentials from Google Cloud (Desktop app)
+- token.json                  Created after first authorization (DO NOT SHARE)
+- downloaded_videos.json      Downloaded/processed TikTok IDs (prevents duplicates)
+- video_urls.txt              Manual TikTok URLs queue
+- youtube_ready\              Work folder (videos are deleted after upload)
+
+------------------------------------------------------------
+10) Common errors
+------------------------------------------------------------
+
+- Error 400: redirect_uri_mismatch
+  → You used a Web OAuth client. Create a Desktop app OAuth client and re-try.
+
+- Error 403: access_denied / "Google hasn’t verified this app"
+  → Add your email as a Test user (OAuth consent screen) OR publish to Production,
+    then run again and click Continue/Allow.
+
+- Keeps asking to authorize again
+  → token.json missing/blocked OR consent screen in Testing (refresh token expired).
