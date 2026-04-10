@@ -1,1 +1,1 @@
-web: python railway_setup.py && python tiktok_to_youtube.py
+web: python -u railway_setup.py && python -u tiktok_to_youtube.py

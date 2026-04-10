@@ -7,18 +7,34 @@ from datetime import datetime
 import subprocess
 from pathlib import Path
 
+def _configure_output_streams():
+    """Keep logs visible in containerized/non-interactive environments."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', line_buffering=True)
+        except Exception:
+            try:
+                stream.reconfigure(line_buffering=True)
+            except Exception:
+                pass
+
+_configure_output_streams()
+
 print("DEBUG: Starting imports...")
 sys.stdout.flush()
 
-# Fix Windows console encoding for Unicode characters
-if sys.platform == 'win32':
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
-    except:
-        pass
-    # Set environment variable for subprocess
-    os.environ['PYTHONIOENCODING'] = 'utf-8'
+# Fix console encoding for Unicode characters and subprocess output
+os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+
+IS_RAILWAY = any(
+    os.getenv(name) for name in (
+        'RAILWAY_PROJECT_ID',
+        'RAILWAY_SERVICE_ID',
+        'RAILWAY_ENVIRONMENT_ID',
+        'RAILWAY_DEPLOYMENT_ID',
+    )
+)
+IS_NON_INTERACTIVE = IS_RAILWAY or not sys.stdin.isatty()
 
 print("DEBUG: Importing video processor...")
 sys.stdout.flush()
@@ -169,6 +185,12 @@ class YouTubeUploader:
             client_secret_file = BASE_DIR / 'client_secret.json'
             force_prompt = self.config['youtube_settings'].get('always_prompt_account', False)
             token_exists = token_file.exists()
+            interactive_auth_allowed = not IS_NON_INTERACTIVE
+            
+            if force_prompt and not interactive_auth_allowed:
+                print("always_prompt_account is enabled, but interactive auth is unavailable here.")
+                print("-> Ignoring always_prompt_account and trying the saved token instead.")
+                force_prompt = False
             
             # Check if client_secret.json exists
             if not client_secret_file.exists():
@@ -198,12 +220,21 @@ class YouTubeUploader:
             # Refresh or get new token
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
+                    print("-> Refreshing YouTube token...")
                     try:
                         creds.refresh(Request())
-                    except Exception:
+                        print("✓ YouTube token refreshed successfully")
+                    except Exception as refresh_error:
+                        print(f"Saved YouTube token could not be refreshed: {refresh_error}")
                         creds = None
                 
                 if not creds or not creds.valid:
+                    if not interactive_auth_allowed:
+                        print("Interactive YouTube OAuth is disabled in Railway/non-interactive mode.")
+                        print("-> Generate a fresh token.json locally and redeploy, or set AUTO_UPLOAD_TO_YOUTUBE=false.")
+                        self.enabled = False
+                        return
+                    
                     flow = InstalledAppFlow.from_client_secrets_file(str(client_secret_file), self.SCOPES)
                     try:
                         try:
@@ -1360,6 +1391,11 @@ if __name__ == "__main__":
         print("⚠ WARNING: TikTok username not configured!")
         print("\nPlease edit 'config.json' and set the 'tiktok_username' field")
         print("Example: \"tiktok_username\": \"khaby.lame\"\n")
+        
+        if IS_NON_INTERACTIVE:
+            print("-> This environment cannot answer interactive prompts.")
+            print("-> Set TIKTOK_USERNAME in Railway variables or update config.json before deploying.")
+            exit(1)
         
         response = input("Do you want to enter the username now? (y/n): ")
         if response.lower() == 'y':

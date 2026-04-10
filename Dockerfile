@@ -4,6 +4,10 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
+# Keep Python logs visible in Railway
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 # Install only essential system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
@@ -25,4 +29,4 @@ COPY .gitignore .
 RUN mkdir -p downloaded_videos youtube_ready
 
 # Run the application
-CMD ["sh", "-c", "python railway_setup.py && python tiktok_to_youtube.py"]
+CMD ["sh", "-c", "python -u railway_setup.py && python -u tiktok_to_youtube.py"]
