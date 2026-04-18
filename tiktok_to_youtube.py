@@ -731,26 +731,27 @@ class TikTokToYouTube:
         return title, description, merged
     
     def _list_pending_videos(self):
+        """List pending videos from shorts folder only (main folder is just a backup)"""
         pending = {}
         
-        for root in (self.shorts_folder, self.main_folder):
-            if not root.exists():
+        # Only check shorts folder for uploads (main folder is just a backup copy)
+        if not self.shorts_folder.exists():
+            return []
+        
+        for file_path in self.shorts_folder.rglob('*'):
+            if not self._is_video_file(file_path):
                 continue
             
-            for file_path in root.rglob('*'):
-                if not self._is_video_file(file_path):
-                    continue
-                
-                try:
-                    rel = file_path.relative_to(root)
-                except ValueError:
-                    continue
-                
-                key = str(rel).lower()
-                if key in pending:
-                    continue
-                
-                pending[key] = file_path
+            try:
+                rel = file_path.relative_to(self.shorts_folder)
+            except ValueError:
+                continue
+            
+            key = str(rel).lower()
+            if key in pending:
+                continue
+            
+            pending[key] = file_path
         
         try:
             return sorted(pending.values(), key=lambda p: p.stat().st_mtime)
