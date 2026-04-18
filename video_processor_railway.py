@@ -172,7 +172,8 @@ class VideoProcessor:
                     pass
 
     def add_watermark_to_video(self, input_path, output_path):
-        """Add watermark text to video using ffmpeg - centered, black text, no background."""
+        """Add watermark text to video using ffmpeg - centered, black text, no background.
+        Optimized for Railway with faster encoding."""
         if not self.add_watermark:
             return input_path
 
@@ -195,14 +196,14 @@ class VideoProcessor:
                 '-vf',
                 f"drawtext=text='{watermark_escaped}':fontsize=40:fontcolor=black:x=(w-text_w)/2:y=(h-text_h)/2",
                 '-c:v', 'libx264',
-                '-preset', 'fast',
-                '-crf', '23',
+                '-preset', 'ultrafast',  # Fastest encoding for Railway
+                '-crf', '28',  # Lower quality but faster
                 '-c:a', 'copy',
                 '-y',
                 str(output_path)
             ]
 
-            result = run_command_safe(cmd, timeout=300)
+            result = run_command_safe(cmd, timeout=180)  # Reduced timeout
 
             if output_path.exists() and output_path.stat().st_size > 0:
                 print("✓ Watermark added")
@@ -229,6 +230,7 @@ class VideoProcessor:
         """
         Split video into segments based on split_duration.
         Upload all segments regardless of length.
+        Optimized for Railway with faster encoding.
         """
         if not self.split_videos:
             return [video_path]
@@ -278,26 +280,28 @@ class VideoProcessor:
 
                 output_path = video_path.parent / f"{video_path.stem}_part{i + 1}{video_path.suffix}"
 
+                # Use faster encoding settings for Railway
                 cmd = [
                     'ffmpeg',
                     '-i', str(video_path),
                     '-ss', str(start_time),
                     '-t', str(segment_duration),
                     '-c:v', 'libx264',
-                    '-preset', 'fast',
-                    '-crf', '23',
-                    '-c:a', 'aac',
-                    '-b:a', '128k',
+                    '-preset', 'ultrafast',  # Fastest encoding
+                    '-crf', '28',  # Lower quality but faster
+                    '-c:a', 'copy',  # Don't re-encode audio
                     '-y',
                     str(output_path)
                 ]
 
-                result = run_command_safe(cmd, timeout=120)
+                result = run_command_safe(cmd, timeout=60)  # Reduced timeout
                 if result.returncode == 0 and output_path.exists():
                     output_files.append(output_path)
                     print(f"  ✓ Created part {i + 1} ({segment_duration:.1f}s)")
                 else:
                     print(f"  Warning: Failed to create part {i + 1}")
+                    if result.stderr:
+                        print(f"    Error: {result.stderr[-200:]}")
 
             if output_files:
                 try:
