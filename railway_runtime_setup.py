@@ -123,8 +123,14 @@ def _set_if_provided(mapping, key, value):
 
 def setup_runtime_config():
     """Decode credentials and build effective config.json."""
-    _decode_file_from_env('CLIENT_SECRET_B64', 'client_secret.json')
-    _decode_file_from_env('TOKEN_B64', 'token.json')
+    # Support both old and new variable names
+    _decode_file_from_env('YOUTUBE_CLIENT_SECRET_B64', 'client_secret.json')
+    if not Path('client_secret.json').exists():
+        _decode_file_from_env('CLIENT_SECRET_B64', 'client_secret.json')
+    
+    _decode_file_from_env('YOUTUBE_TOKEN_JSON', 'token.json')
+    if not Path('token.json').exists():
+        _decode_file_from_env('TOKEN_B64', 'token.json')
 
     config = _load_base_config()
     youtube_settings = _ensure_section(config, 'youtube_settings')
