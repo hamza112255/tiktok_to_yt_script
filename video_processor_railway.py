@@ -191,8 +191,7 @@ class VideoProcessor:
     def split_video_into_shorts(self, video_path):
         """
         Split video into segments based on split_duration.
-        Only split if video is at least 2x split_duration.
-        Discard segments shorter than min_segment_duration.
+        Upload all segments regardless of length.
         """
         if not self.split_videos:
             return [video_path]
@@ -214,31 +213,29 @@ class VideoProcessor:
             data = json.loads(result.stdout)
             duration = float(data['format']['duration'])
 
-            min_duration_to_split = self.split_duration * 2
-            if duration < min_duration_to_split:
-                print(f"-> Video is {duration:.1f}s, no split needed (minimum {min_duration_to_split}s)")
+            # Split if video is longer than split_duration
+            if duration <= self.split_duration:
+                print(f"-> Video is {duration:.1f}s, no split needed")
                 return [video_path]
 
             print(f"-> Splitting {duration:.1f}s video into {self.split_duration}s segments")
 
+            # Calculate number of segments (always include remaining part)
             num_segments = int(duration / self.split_duration)
             remaining = duration % self.split_duration
 
-            if remaining > 0 and remaining < self.min_segment_duration:
-                print(f"  -> Last segment ({remaining:.1f}s) is too short, will be discarded")
-            elif remaining >= self.min_segment_duration:
+            if remaining > 0:
                 num_segments += 1
+                print(f"  -> Will create {num_segments} parts (last part: {remaining:.1f}s)")
 
             output_files = []
 
             for i in range(num_segments):
                 start_time = i * self.split_duration
 
+                # For the last segment, use remaining duration
                 if i == num_segments - 1 and remaining > 0:
                     segment_duration = remaining
-                    if segment_duration < self.min_segment_duration:
-                        print(f"  -> Skipping part {i + 1} (too short: {segment_duration:.1f}s)")
-                        continue
                 else:
                     segment_duration = self.split_duration
 
