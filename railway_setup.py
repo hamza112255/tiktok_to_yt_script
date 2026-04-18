@@ -13,8 +13,8 @@ DATA_DIR = Path('/app/data') if Path('/app/data').exists() else Path('.')
 def setup_credentials():
     """Decode base64 credentials from environment variables"""
     
-    # Decode client_secret.json
-    client_secret_b64 = os.getenv('CLIENT_SECRET_B64')
+    # Decode client_secret.json - support both old and new variable names
+    client_secret_b64 = os.getenv('YOUTUBE_CLIENT_SECRET_B64') or os.getenv('CLIENT_SECRET_B64')
     if client_secret_b64:
         try:
             client_secret = base64.b64decode(client_secret_b64).decode('utf-8')
@@ -22,10 +22,10 @@ def setup_credentials():
                 f.write(client_secret)
             print("✓ client_secret.json created from environment variable")
         except Exception as e:
-            print(f"⚠ Failed to decode CLIENT_SECRET_B64: {e}")
+            print(f"⚠ Failed to decode client secret: {e}")
     
-    # Decode token.json
-    token_b64 = os.getenv('TOKEN_B64')
+    # Decode token.json - support both old and new variable names
+    token_b64 = os.getenv('YOUTUBE_TOKEN_JSON') or os.getenv('TOKEN_B64')
     if token_b64:
         try:
             token = base64.b64decode(token_b64).decode('utf-8')
@@ -33,7 +33,7 @@ def setup_credentials():
                 f.write(token)
             print("✓ token.json created from environment variable")
         except Exception as e:
-            print(f"⚠ Failed to decode TOKEN_B64: {e}")
+            print(f"⚠ Failed to decode token: {e}")
     
     # Create config.json from environment variables
     config = {
