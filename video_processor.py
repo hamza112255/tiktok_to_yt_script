@@ -157,14 +157,15 @@ class VideoProcessor:
             # C: becomes C\:
             font_file = "C\\:/Windows/Fonts/arial.ttf"
             
-            # Centered watermark with black text, no background
+            # Styled watermark: smaller size (28), semi-transparent white with subtle shadow
             # x=(w-text_w)/2 centers horizontally
             # y=(h-text_h)/2 centers vertically
+            # alpha=0.7 makes it semi-transparent
             cmd = [
                 'ffmpeg',
                 '-i', str(input_path),
                 '-vf', 
-                f"drawtext=fontfile={font_file}:text='{self.watermark_text}':fontsize=40:fontcolor=black:x=(w-text_w)/2:y=(h-text_h)/2",
+                f"drawtext=fontfile={font_file}:text='{self.watermark_text}':fontsize=28:fontcolor=white@0.7:x=(w-text_w)/2:y=(h-text_h)/2:shadowcolor=black@0.5:shadowx=1:shadowy=1",
                 '-c:v', 'libx264',
                 '-preset', 'fast',
                 '-crf', '23',

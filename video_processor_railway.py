@@ -172,7 +172,7 @@ class VideoProcessor:
                     pass
 
     def add_watermark_to_video(self, input_path, output_path):
-        """Add watermark text to video using ffmpeg - centered, black text, no background.
+        """Add watermark text to video using ffmpeg - centered, styled text.
         Optimized for Railway with faster encoding."""
         if not self.add_watermark:
             return input_path
@@ -187,14 +187,15 @@ class VideoProcessor:
                 .replace("'", "\\'")
             )
 
-            # Centered watermark with black text, no background
+            # Styled watermark: smaller size (28), semi-transparent white with subtle shadow
             # x=(w-text_w)/2 centers horizontally
             # y=(h-text_h)/2 centers vertically
+            # alpha=0.7 makes it semi-transparent
             cmd = [
                 'ffmpeg',
                 '-i', str(input_path),
                 '-vf',
-                f"drawtext=text='{watermark_escaped}':fontsize=40:fontcolor=black:x=(w-text_w)/2:y=(h-text_h)/2",
+                f"drawtext=text='{watermark_escaped}':fontsize=28:fontcolor=white@0.7:x=(w-text_w)/2:y=(h-text_h)/2:shadowcolor=black@0.5:shadowx=1:shadowy=1",
                 '-c:v', 'libx264',
                 '-preset', 'ultrafast',  # Fastest encoding for Railway
                 '-crf', '28',  # Lower quality but faster

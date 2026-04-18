@@ -17,7 +17,7 @@
     "organize_by_date": true,
     "auto_upload_to_youtube": true,
     "always_prompt_account": false,
-    "title_suffix": " | TikTok",
+    "title_suffix": "",
     "use_tiktok_hashtags": false,
     "skip_copyrighted": true,
     "skip_non_original_audio": true,
