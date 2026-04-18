@@ -34,7 +34,7 @@
     "default_description": "#fyp #trending #viral #rajabfamily #rajab #rajabbutt #viralshorts #maandogarlive #maandogar #shezi #haidershah #haiderlive #rajabvlog #jahangir",
     "add_watermark": true,
     "watermark_text": "Lahori Twins",
-    "skip_female_videos": true,
+    "skip_female_videos": false,
     "split_long_videos": true,
     "split_duration_seconds": 38,
     "min_segment_duration_seconds": 0
