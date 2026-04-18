@@ -128,7 +128,7 @@ class VideoProcessor:
     
     def add_watermark_to_video(self, input_path, output_path):
         """
-        Add watermark text to video using ffmpeg
+        Add watermark text to video using ffmpeg - centered, black text, no background
         """
         if not self.add_watermark:
             return input_path
@@ -140,11 +140,14 @@ class VideoProcessor:
             # C: becomes C\:
             font_file = "C\\:/Windows/Fonts/arial.ttf"
             
+            # Centered watermark with black text, no background
+            # x=(w-text_w)/2 centers horizontally
+            # y=(h-text_h)/2 centers vertically
             cmd = [
                 'ffmpeg',
                 '-i', str(input_path),
                 '-vf', 
-                f"drawtext=fontfile={font_file}:text={self.watermark_text}:fontsize=40:fontcolor=white:x=10:y=10:shadowcolor=black:shadowx=2:shadowy=2",
+                f"drawtext=fontfile={font_file}:text='{self.watermark_text}':fontsize=40:fontcolor=black:x=(w-text_w)/2:y=(h-text_h)/2",
                 '-c:v', 'libx264',
                 '-preset', 'fast',
                 '-crf', '23',

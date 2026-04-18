@@ -135,7 +135,7 @@ class VideoProcessor:
                     pass
 
     def add_watermark_to_video(self, input_path, output_path):
-        """Add watermark text to video using ffmpeg."""
+        """Add watermark text to video using ffmpeg - centered, black text, no background."""
         if not self.add_watermark:
             return input_path
 
@@ -149,11 +149,14 @@ class VideoProcessor:
                 .replace("'", "\\'")
             )
 
+            # Centered watermark with black text, no background
+            # x=(w-text_w)/2 centers horizontally
+            # y=(h-text_h)/2 centers vertically
             cmd = [
                 'ffmpeg',
                 '-i', str(input_path),
                 '-vf',
-                f"drawtext=text='{watermark_escaped}':fontsize=40:fontcolor=white:x=10:y=10:shadowcolor=black:shadowx=2:shadowy=2",
+                f"drawtext=text='{watermark_escaped}':fontsize=40:fontcolor=black:x=(w-text_w)/2:y=(h-text_h)/2",
                 '-c:v', 'libx264',
                 '-preset', 'fast',
                 '-crf', '23',

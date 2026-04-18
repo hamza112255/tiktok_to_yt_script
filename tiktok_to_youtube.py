@@ -786,13 +786,8 @@ class TikTokToYouTube:
             
             # Upload each processed file
             for idx, video_file in enumerate(video_files_to_upload):
-                # Build title with part number if split
-                if len(video_files_to_upload) > 1:
-                    title, description, meta = self._build_upload_metadata(video_file)
-                    # Add part number to title
-                    title = f"{title} (Part {idx+1}/{len(video_files_to_upload)})"
-                else:
-                    title, description, meta = self._build_upload_metadata(video_file)
+                # Build title without part numbers
+                title, description, meta = self._build_upload_metadata(video_file)
                 
                 should_upload, privacy, reason = self._get_upload_decision(meta)
                 if not should_upload:
@@ -989,14 +984,8 @@ class TikTokToYouTube:
                     else:
                         part_main_path = main_path
                     
-                    # Build title with part number if split
-                    if len(video_files_to_upload) > 1:
-                        part_metadata = metadata.copy() if metadata else {}
-                        original_title = part_metadata.get('title', '')
-                        part_metadata['title'] = f"{original_title} (Part {idx+1}/{len(video_files_to_upload)})"
-                        title, description, meta = self._build_upload_metadata(video_file, part_metadata)
-                    else:
-                        title, description, meta = self._build_upload_metadata(video_file, metadata)
+                    # Build title without part numbers
+                    title, description, meta = self._build_upload_metadata(video_file, metadata)
                     
                     should_upload, privacy, reason = self._get_upload_decision(meta)
                     if not should_upload:
@@ -1271,14 +1260,8 @@ class TikTokToYouTube:
                     else:
                         part_main_path = main_path
                     
-                    # Build title with part number if split
-                    if len(video_files_to_upload) > 1:
-                        part_metadata = metadata.copy() if metadata else {}
-                        original_title = part_metadata.get('title', '')
-                        part_metadata['title'] = f"{original_title} (Part {idx+1}/{len(video_files_to_upload)})"
-                        title, description, meta = self._build_upload_metadata(video_file, part_metadata)
-                    else:
-                        title, description, meta = self._build_upload_metadata(video_file, metadata)
+                    # Build title without part numbers
+                    title, description, meta = self._build_upload_metadata(video_file, metadata)
                     
                     should_upload, privacy, reason = self._get_upload_decision(meta)
                     if not should_upload:
