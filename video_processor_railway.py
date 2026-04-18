@@ -1,10 +1,11 @@
 """
 Railway video processing module.
-Supports watermarking, video splitting, and female detection using DeepFace.
+Supports watermarking, video splitting, and optional female detection.
 """
 
 import json
 import subprocess
+import os
 
 
 def run_command_safe(cmd, timeout=None):
@@ -41,19 +42,23 @@ class VideoProcessor:
         print("-> Video processor initialized (Railway mode)")
 
     def _load_deepface(self):
-        """Load DeepFace library for gender detection"""
+        """Load DeepFace library for gender detection - with CPU-only mode"""
         if self.deepface_available is None:
             try:
+                # Force CPU mode for DeepFace to avoid CUDA errors
+                os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+                os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+                
                 from deepface import DeepFace
                 self.DeepFace = DeepFace
                 self.deepface_available = True
-                print("✓ DeepFace loaded for gender detection")
+                print("✓ DeepFace loaded (CPU mode)")
             except ImportError:
-                print("Warning: DeepFace not installed. Install with: pip install deepface")
-                print("  Female detection will be disabled.")
+                print("Warning: DeepFace not installed - female detection disabled")
                 self.deepface_available = False
             except Exception as e:
                 print(f"Warning: Could not load DeepFace: {e}")
+                print("  Female detection will be disabled")
                 self.deepface_available = False
         
         return self.deepface_available
@@ -62,8 +67,24 @@ class VideoProcessor:
         """
         Detect if there's a female person in the video using DeepFace.
         Returns: (has_female: bool, confidence: float)
+        
+        Note: This feature is disabled on Railway due to resource constraints.
         """
         if not self.skip_female:
+            return False, 0.0
+
+        # Check if we're on Railway - disable heavy AI processing
+        is_railway = any(
+            os.getenv(name) for name in (
+                'RAILWAY_PROJECT_ID',
+                'RAILWAY_SERVICE_ID',
+                'RAILWAY_ENVIRONMENT_ID',
+            )
+        )
+        
+        if is_railway:
+            print("⚠ Female detection disabled on Railway (resource constraints)")
+            print("  To enable: run locally or upgrade Railway plan")
             return False, 0.0
 
         if not self._load_deepface():
@@ -84,9 +105,9 @@ class VideoProcessor:
 
             sample_interval = max(fps * 3, 90) if fps > 0 else 90
             if total_frames > 0:
-                frames_to_check = min(8, max(1, total_frames // sample_interval))
+                frames_to_check = min(5, max(1, total_frames // sample_interval))  # Reduced to 5 frames
             else:
-                frames_to_check = 4
+                frames_to_check = 3
 
             female_detections = 0
             frames_checked = 0
@@ -108,7 +129,8 @@ class VideoProcessor:
                         frame,
                         actions=['gender'],
                         enforce_detection=False,
-                        silent=True
+                        silent=True,
+                        detector_backend='opencv'  # Use lightweight detector
                     )
 
                     # Check if any face is detected as female

@@ -4,5 +4,3 @@ google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
 opencv-python-headless
-deepface
-tf-keras
