@@ -27,6 +27,7 @@ wheels/
 client_secret.json
 token.json
 config.json
+railway_credentials.txt
 
 # Downloaded content
 downloaded_videos/
