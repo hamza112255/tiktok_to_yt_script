@@ -40,33 +40,37 @@ class VideoProcessor:
         self.split_duration = config['youtube_settings'].get('split_duration_seconds', 30)
         self.min_segment_duration = config['youtube_settings'].get('min_segment_duration_seconds', 20)
         
-        # Initialize YOLO model for person detection (lazy loading)
-        self.yolo_model = None
+        # Initialize DeepFace for gender detection (lazy loading)
+        self.deepface_available = None
     
-    def _load_yolo_model(self):
-        """Load YOLO model for person detection"""
-        if self.yolo_model is None:
+    def _load_deepface(self):
+        """Load DeepFace library for gender detection"""
+        if self.deepface_available is None:
             try:
-                from ultralytics import YOLO
-                print("→ Loading AI model for person detection...")
-                self.yolo_model = YOLO('yolov8n.pt')  # Nano model (fastest, smallest)
-                print("✓ AI model loaded")
+                from deepface import DeepFace
+                self.DeepFace = DeepFace
+                self.deepface_available = True
+                print("✓ DeepFace loaded for gender detection")
+            except ImportError:
+                print("⚠ DeepFace not installed. Install with: pip install deepface")
+                print("  Female detection will be disabled.")
+                self.deepface_available = False
             except Exception as e:
-                print(f"⚠ Could not load AI model: {e}")
-                self.yolo_model = False
-        return self.yolo_model
+                print(f"⚠ Could not load DeepFace: {e}")
+                self.deepface_available = False
+        
+        return self.deepface_available
     
     def detect_female_in_video(self, video_path):
         """
-        Detect if there's a female person in the video
+        Detect if there's a female person in the video using DeepFace
         Returns: (has_female: bool, confidence: float)
         """
         if not self.skip_female:
             return False, 0.0
         
-        model = self._load_yolo_model()
-        if not model:
-            print("⚠ Female detection disabled (model not available)")
+        if not self._load_deepface():
+            print("⚠ Female detection disabled (DeepFace not available)")
             return False, 0.0
         
         try:
@@ -74,12 +78,14 @@ class VideoProcessor:
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
             
-            # Sample frames (check every 2 seconds)
-            sample_interval = fps * 2 if fps > 0 else 30
-            frames_to_check = min(10, total_frames // sample_interval)  # Check max 10 frames
+            # Sample frames (check every 3 seconds)
+            sample_interval = fps * 3 if fps > 0 else 90
+            frames_to_check = min(8, total_frames // sample_interval)  # Check max 8 frames
             
             female_detections = 0
             frames_checked = 0
+            
+            print(f"→ Analyzing video for female presence ({frames_to_check} frames)...")
             
             for i in range(frames_to_check):
                 frame_pos = i * sample_interval
@@ -91,32 +97,43 @@ class VideoProcessor:
                 
                 frames_checked += 1
                 
-                # Run YOLO detection
-                results = model(frame, verbose=False)
-                
-                # Check for person detections
-                for result in results:
-                    boxes = result.boxes
-                    for box in boxes:
-                        cls = int(box.cls[0])
-                        conf = float(box.conf[0])
-                        
-                        # Class 0 is 'person' in COCO dataset
-                        if cls == 0 and conf > 0.5:
-                            # Simple heuristic: if person detected, assume might be female
-                            # For better accuracy, you'd need a gender classification model
+                try:
+                    # Analyze frame for gender using DeepFace
+                    # DeepFace.analyze returns a list of faces with gender predictions
+                    result = self.DeepFace.analyze(
+                        frame, 
+                        actions=['gender'],
+                        enforce_detection=False,  # Don't fail if no face detected
+                        silent=True
+                    )
+                    
+                    # Check if any face is detected as female
+                    if isinstance(result, list):
+                        for face in result:
+                            gender = face.get('dominant_gender', '').lower()
+                            if gender == 'woman':
+                                female_detections += 1
+                                break
+                    elif isinstance(result, dict):
+                        gender = result.get('dominant_gender', '').lower()
+                        if gender == 'woman':
                             female_detections += 1
-                            break
+                
+                except Exception as e:
+                    # Frame analysis failed (no face detected or other error)
+                    continue
             
             cap.release()
             
-            # If we detect persons in more than 30% of sampled frames, flag it
+            # If we detect females in more than 30% of sampled frames, flag it
             if frames_checked > 0:
                 detection_rate = female_detections / frames_checked
                 has_female = detection_rate > 0.3
                 
                 if has_female:
-                    print(f"⚠ Person detected in {detection_rate*100:.1f}% of frames")
+                    print(f"⚠ Female detected in {detection_rate*100:.1f}% of frames")
+                else:
+                    print(f"✓ No female detected (checked {frames_checked} frames)")
                 
                 return has_female, detection_rate
             

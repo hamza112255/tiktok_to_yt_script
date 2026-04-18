@@ -6,4 +6,5 @@ google-api-python-client
 opencv-python
 numpy
 pillow
-ultralytics
+deepface
+tf-keras

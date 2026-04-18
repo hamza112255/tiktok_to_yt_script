@@ -1,6 +1,6 @@
 """
 Railway video processing module.
-Supports watermarking, video splitting, and lightweight person detection.
+Supports watermarking, video splitting, and female detection using DeepFace.
 """
 
 import json
@@ -36,38 +36,38 @@ class VideoProcessor:
         self.split_videos = config['youtube_settings'].get('split_long_videos', False)
         self.split_duration = config['youtube_settings'].get('split_duration_seconds', 30)
         self.min_segment_duration = config['youtube_settings'].get('min_segment_duration_seconds', 20)
-        self.person_detector = None
+        self.deepface_available = None
 
         print("-> Video processor initialized (Railway mode)")
 
-    def _load_person_detector(self):
-        """Load a lightweight OpenCV HOG person detector on demand."""
-        if self.person_detector is None:
+    def _load_deepface(self):
+        """Load DeepFace library for gender detection"""
+        if self.deepface_available is None:
             try:
-                import cv2
-
-                print("-> Loading person detection model...")
-                detector = cv2.HOGDescriptor()
-                detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-                self.person_detector = detector
-                print("✓ Person detection model loaded")
+                from deepface import DeepFace
+                self.DeepFace = DeepFace
+                self.deepface_available = True
+                print("✓ DeepFace loaded for gender detection")
+            except ImportError:
+                print("Warning: DeepFace not installed. Install with: pip install deepface")
+                print("  Female detection will be disabled.")
+                self.deepface_available = False
             except Exception as e:
-                print(f"Warning: Could not load person detector: {e}")
-                self.person_detector = False
-
-        return self.person_detector
+                print(f"Warning: Could not load DeepFace: {e}")
+                self.deepface_available = False
+        
+        return self.deepface_available
 
     def detect_female_in_video(self, video_path):
         """
-        Approximate female filtering using human presence detection.
-        Returns: (has_person: bool, confidence: float)
+        Detect if there's a female person in the video using DeepFace.
+        Returns: (has_female: bool, confidence: float)
         """
         if not self.skip_female:
             return False, 0.0
 
-        detector = self._load_person_detector()
-        if not detector:
-            print("Warning: Female/person detection disabled (detector unavailable)")
+        if not self._load_deepface():
+            print("Warning: Female detection disabled (DeepFace not available)")
             return False, 0.0
 
         cap = None
@@ -76,20 +76,22 @@ class VideoProcessor:
 
             cap = cv2.VideoCapture(str(video_path))
             if not cap.isOpened():
-                print("Warning: Could not open video for person detection")
+                print("Warning: Could not open video for female detection")
                 return False, 0.0
 
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-            sample_interval = max(fps * 3, 30) if fps > 0 else 90
+            sample_interval = max(fps * 3, 90) if fps > 0 else 90
             if total_frames > 0:
                 frames_to_check = min(8, max(1, total_frames // sample_interval))
             else:
                 frames_to_check = 4
 
-            person_detections = 0
+            female_detections = 0
             frames_checked = 0
+
+            print(f"-> Analyzing video for female presence ({frames_to_check} frames)...")
 
             for i in range(frames_to_check):
                 frame_pos = i * sample_interval
@@ -100,32 +102,45 @@ class VideoProcessor:
 
                 frames_checked += 1
 
-                height, width = frame.shape[:2]
-                if width > 640:
-                    scale = 640 / width
-                    frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
+                try:
+                    # Analyze frame for gender using DeepFace
+                    result = self.DeepFace.analyze(
+                        frame,
+                        actions=['gender'],
+                        enforce_detection=False,
+                        silent=True
+                    )
 
-                boxes, _weights = detector.detectMultiScale(
-                    frame,
-                    winStride=(8, 8),
-                    padding=(8, 8),
-                    scale=1.05
-                )
-                if len(boxes) > 0:
-                    person_detections += 1
+                    # Check if any face is detected as female
+                    if isinstance(result, list):
+                        for face in result:
+                            gender = face.get('dominant_gender', '').lower()
+                            if gender == 'woman':
+                                female_detections += 1
+                                break
+                    elif isinstance(result, dict):
+                        gender = result.get('dominant_gender', '').lower()
+                        if gender == 'woman':
+                            female_detections += 1
+
+                except Exception:
+                    # Frame analysis failed (no face detected or other error)
+                    continue
 
             if frames_checked == 0:
                 return False, 0.0
 
-            detection_rate = person_detections / frames_checked
-            has_person = detection_rate > 0.3
-            if has_person:
-                print(f"Warning: Person detected in {detection_rate * 100:.1f}% of sampled frames")
+            detection_rate = female_detections / frames_checked
+            has_female = detection_rate > 0.3
+            if has_female:
+                print(f"Warning: Female detected in {detection_rate * 100:.1f}% of frames")
+            else:
+                print(f"✓ No female detected (checked {frames_checked} frames)")
 
-            return has_person, detection_rate
+            return has_female, detection_rate
 
         except Exception as e:
-            print(f"Warning: Error in female/person detection: {e}")
+            print(f"Warning: Error in female detection: {e}")
             return False, 0.0
         finally:
             if cap is not None:
