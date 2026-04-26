@@ -1,0 +1,255 @@
+========================================
+QUICK COMMAND REFERENCE
+========================================
+
+LOCAL TESTING
+-------------
+# Test setup
+python test_setup.py
+
+# Run script locally
+python insta_snap_youtube.py
+
+# Encode credentials for Railway
+python encode_for_railway_insta.py
+
+========================================
+GIT COMMANDS
+-------------
+# Add all files
+git add .
+
+# Commit changes
+git commit -m "Add Instagram/Snapchat downloader"
+
+# Push to GitHub
+git push origin main
+
+# Check status
+git status
+
+========================================
+RAILWAY DEPLOYMENT
+------------------
+# Copy Procfile for Instagram/Snapchat
+copy Procfile.insta Procfile
+
+# Or on Linux/Mac
+cp Procfile.insta Procfile
+
+========================================
+RAILWAY ENVIRONMENT VARIABLES
+-----------------------------
+Required:
+YOUTUBE_CLIENT_SECRET_B64=<base64 content>
+YOUTUBE_TOKEN_JSON=<base64 content>
+AUTO_UPLOAD_TO_YOUTUBE=true
+
+Optional:
+ADD_WATERMARK=true
+WATERMARK_TEXT=Lahori Twins
+SKIP_FEMALE_VIDEOS=false
+SPLIT_LONG_VIDEOS=true
+SPLIT_DURATION_SECONDS=38
+VIDEO_PRIVACY=public
+DEFAULT_DESCRIPTION=#rajabfamily #rajabbutt #viralshorts
+
+========================================
+TESTING COMMANDS
+----------------
+# Test local setup
+python test_setup.py
+
+# Test Railway setup (run on Railway)
+python test_railway_setup.py
+
+# Test video processor
+python -c "from video_processor import VideoProcessor; print('OK')"
+
+# Test YouTube API
+python -c "from googleapiclient.discovery import build; print('OK')"
+
+========================================
+ENCODING COMMANDS
+-----------------
+# Windows PowerShell
+$content = Get-Content client_secret.json -Raw
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($content)
+$encoded = [Convert]::ToBase64String($bytes)
+$encoded | Out-File -FilePath client_secret_b64.txt -NoNewline
+
+# Linux/Mac
+cat client_secret.json | base64 > client_secret_b64.txt
+cat token.json | base64 > token_b64.txt
+
+# Or use Python script
+python encode_for_railway_insta.py
+
+========================================
+RAILWAY CLI (Optional)
+----------------------
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login
+railway login
+
+# Link project
+railway link
+
+# View logs
+railway logs
+
+# Open dashboard
+railway open
+
+# Deploy
+railway up
+
+# Restart service
+railway restart
+
+========================================
+DEBUGGING COMMANDS
+------------------
+# Check Python version
+python --version
+
+# Check FFmpeg
+ffmpeg -version
+ffprobe -version
+
+# Check yt-dlp
+yt-dlp --version
+
+# Test Instagram download
+yt-dlp --playlist-end 1 "https://www.instagram.com/i.haiderr/"
+
+# Test Snapchat download
+yt-dlp --playlist-end 1 "https://www.snapchat.com/add/i-haiderr"
+
+# Check installed packages
+pip list
+
+# Check specific package
+pip show yt-dlp
+
+========================================
+FILE MANAGEMENT
+---------------
+# List files
+dir                    # Windows
+ls -la                 # Linux/Mac
+
+# Check file size
+dir "Track*.mpeg"      # Windows
+ls -lh Track*.mpeg     # Linux/Mac
+
+# Delete files
+del processed.json     # Windows
+rm processed.json      # Linux/Mac
+
+# Create directory
+mkdir temp_downloads   # Both
+
+========================================
+YOUTUBE COMMANDS
+----------------
+# Refresh YouTube token
+python refresh_youtube_token.py
+
+# Check YouTube quota
+# Go to: https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas
+
+========================================
+MONITORING COMMANDS
+-------------------
+# Watch Railway logs (if CLI installed)
+railway logs --follow
+
+# Check disk space
+dir                    # Windows
+df -h                  # Linux/Mac
+
+# Check memory usage
+# Windows: Task Manager (Ctrl+Shift+Esc)
+# Linux: free -h
+# Mac: top
+
+========================================
+MAINTENANCE COMMANDS
+--------------------
+# Update yt-dlp
+pip install --upgrade yt-dlp
+
+# Update all packages
+pip install --upgrade -r requirements.txt
+
+# Clear temp files
+rmdir /s /q temp_downloads    # Windows
+rm -rf temp_downloads         # Linux/Mac
+
+# Reset tracking
+del processed.json            # Windows
+rm processed.json             # Linux/Mac
+
+========================================
+USEFUL URLS
+-----------
+Railway Dashboard:
+https://railway.app
+
+YouTube Studio:
+https://studio.youtube.com
+
+YouTube Channel:
+https://www.youtube.com/@LahoriTwins
+
+Google Cloud Console:
+https://console.cloud.google.com
+
+GitHub Repository:
+https://github.com/hamza112255/tiktok_to_yt_script
+
+========================================
+QUICK TROUBLESHOOTING
+---------------------
+# If script fails, check:
+1. Railway logs
+2. Environment variables
+3. YouTube token validity
+4. FFmpeg installation
+5. Disk space
+
+# If upload fails:
+1. Check YouTube quota
+2. Verify token.json
+3. Check video format
+4. Review Railway logs
+
+# If download fails:
+1. Check account URLs
+2. Verify yt-dlp works
+3. Try with VPN
+4. Wait and retry
+
+========================================
+EMERGENCY COMMANDS
+------------------
+# Stop Railway service
+# Go to Railway dashboard → Service → Settings → Pause
+
+# Delete all temp files
+rmdir /s /q temp_downloads    # Windows
+rm -rf temp_downloads         # Linux/Mac
+
+# Reset everything
+del token.json
+del processed.json
+rmdir /s /q temp_downloads
+
+# Reinstall dependencies
+pip uninstall -y yt-dlp google-api-python-client
+pip install -r requirements.txt
+
+========================================

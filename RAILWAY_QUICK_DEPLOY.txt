@@ -1,0 +1,214 @@
+========================================
+RAILWAY QUICK DEPLOY GUIDE
+Instagram/Snapchat to YouTube
+========================================
+
+STEP 1: PREPARE CREDENTIALS
+----------------------------
+# Run locally first to generate token.json
+python insta_snap_youtube.py
+
+# Encode credentials for Railway
+python encode_for_railway_insta.py
+
+This creates:
+- client_secret_b64.txt
+- token_b64.txt
+
+========================================
+STEP 2: PUSH TO GITHUB
+----------------------------
+git add .
+git commit -m "Add Instagram/Snapchat downloader"
+git push origin main
+
+========================================
+STEP 3: DEPLOY TO RAILWAY
+----------------------------
+1. Go to https://railway.app
+2. Click "New Project"
+3. Select "Deploy from GitHub repo"
+4. Choose your repository
+5. Wait for build to complete
+
+========================================
+STEP 4: ADD ENVIRONMENT VARIABLES
+----------------------------
+In Railway dashboard → Variables:
+
+REQUIRED:
+---------
+YOUTUBE_CLIENT_SECRET_B64=<paste from client_secret_b64.txt>
+YOUTUBE_TOKEN_JSON=<paste from token_b64.txt>
+AUTO_UPLOAD_TO_YOUTUBE=true
+
+OPTIONAL:
+---------
+ADD_WATERMARK=true
+WATERMARK_TEXT=Lahori Twins
+SKIP_FEMALE_VIDEOS=false
+SPLIT_LONG_VIDEOS=true
+SPLIT_DURATION_SECONDS=38
+VIDEO_PRIVACY=public
+DEFAULT_DESCRIPTION=#rajabfamily #rajabbutt #viralshorts #maandogar #shezi #haidershah #haiderlive #jahangir
+
+========================================
+STEP 5: UPDATE PROCFILE
+----------------------------
+# Rename Procfile.insta to Procfile
+copy Procfile.insta Procfile
+
+# Or edit Procfile to:
+web: python -u railway_runtime_setup.py && python -u insta_snap_youtube.py
+
+# Commit and push
+git add Procfile
+git commit -m "Update Procfile"
+git push origin main
+
+========================================
+STEP 6: VERIFY DEPLOYMENT
+----------------------------
+In Railway dashboard:
+1. Click on your service
+2. Go to "View Logs"
+
+You should see:
+✓ client_secret.json created
+✓ token.json created
+✓ config.json created
+✓ Railway setup complete
+→ Starting main script...
+
+[10:30:00] Checking...
+→ Checking instagram @i.haiderr
+→ Checking snapchat @i-haiderr
+
+========================================
+CHECKING IF IT'S WORKING
+========================================
+
+1. VIEW LOGS
+   Railway dashboard → Service → View Logs
+
+2. LOOK FOR SUCCESS MESSAGES
+   ✓ Downloaded: [filename]
+   ✓ Uploaded! ID: [video_id]
+
+3. CHECK YOUTUBE CHANNEL
+   https://www.youtube.com/@LahoriTwins
+
+4. MONITOR EVERY 10 MINUTES
+   Script checks automatically
+
+========================================
+TROUBLESHOOTING
+========================================
+
+PROBLEM: "client_secret.json not found"
+SOLUTION: Check YOUTUBE_CLIENT_SECRET_B64 variable
+
+PROBLEM: "YouTube authentication failed"
+SOLUTION: Regenerate token.json locally and re-encode
+
+PROBLEM: "ffmpeg not installed"
+SOLUTION: Add nixpacks.toml with FFmpeg
+
+PROBLEM: "Memory limit exceeded"
+SOLUTION: Set SKIP_FEMALE_VIDEOS=false
+
+PROBLEM: "No new content found"
+SOLUTION: Normal - platforms may block. Script retries.
+
+========================================
+USEFUL COMMANDS
+========================================
+
+# Test setup locally
+python test_setup.py
+
+# Test Railway setup (run on Railway)
+python test_railway_setup.py
+
+# Encode credentials
+python encode_for_railway_insta.py
+
+# View Railway logs
+railway logs
+
+# Restart Railway service
+railway restart
+
+========================================
+RAILWAY DASHBOARD URLS
+========================================
+
+Main: https://railway.app
+Project: https://railway.app/project/[your-project-id]
+Logs: Click service → View Logs
+Variables: Click service → Variables
+Metrics: Click service → Metrics
+
+========================================
+MONITORING
+========================================
+
+CHECK EVERY DAY:
+- Railway logs for errors
+- YouTube channel for uploads
+- Railway metrics for resource usage
+
+EXPECTED BEHAVIOR:
+- Checks every 10 minutes
+- Downloads new content
+- Uploads to YouTube
+- Deletes files after upload
+
+========================================
+COSTS
+========================================
+
+Railway Free Tier:
+- $5 free credit/month
+- ~500 hours runtime
+- Sufficient for this script!
+
+If you exceed:
+- Upgrade to Pro ($20/month)
+- Or optimize check interval
+
+========================================
+IMPORTANT NOTES
+========================================
+
+1. Script runs 24/7 on Railway
+2. Checks every 10 minutes
+3. YouTube quota: ~6 uploads/day
+4. Files deleted after upload
+5. Female detection disabled (saves memory)
+
+========================================
+NEED HELP?
+========================================
+
+Full guide: RAILWAY_INSTA_SNAP_DEPLOYMENT.md
+Troubleshooting: TROUBLESHOOTING.md
+Setup guide: INSTAGRAM_SNAPCHAT_SETUP.md
+
+========================================
+SUCCESS INDICATORS
+========================================
+
+✓ Railway build completed
+✓ Logs show "Railway setup complete"
+✓ Script checks accounts every 10 minutes
+✓ Downloads appear in logs
+✓ Uploads appear on YouTube
+✓ No error messages in logs
+
+========================================
+
+Your Instagram/Snapchat content is now
+automatically uploading to YouTube 24/7!
+
+🚀 Happy Deploying!

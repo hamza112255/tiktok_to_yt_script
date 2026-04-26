@@ -976,15 +976,6 @@ class TikTokToYouTube:
             # Upload to YouTube if enabled
             if self.youtube_uploader.enabled:
                 for idx, video_file in enumerate(video_files_to_upload):
-                    # Update main_path for each part
-                    if len(video_files_to_upload) > 1:
-                        part_main_path = main_path.parent / video_file.name
-                        if shorts_path.exists() and video_file != shorts_path:
-                            import shutil
-                            shutil.copy2(video_file, part_main_path)
-                    else:
-                        part_main_path = main_path
-                    
                     # Build title without part numbers
                     title, description, meta = self._build_upload_metadata(video_file, metadata)
                     
@@ -1252,15 +1243,6 @@ class TikTokToYouTube:
                     metadata['title'] = video_info.get('title')
                 
                 for idx, video_file in enumerate(video_files_to_upload):
-                    # Update main_path for each part
-                    if len(video_files_to_upload) > 1:
-                        part_main_path = main_path.parent / video_file.name
-                        if shorts_path.exists() and video_file != shorts_path:
-                            import shutil
-                            shutil.copy2(video_file, part_main_path)
-                    else:
-                        part_main_path = main_path
-                    
                     # Build title without part numbers
                     title, description, meta = self._build_upload_metadata(video_file, metadata)
                     

@@ -1,0 +1,99 @@
+========================================
+QUICK START GUIDE
+Instagram & Snapchat to YouTube
+========================================
+
+STEP 1: Install Dependencies
+-----------------------------
+pip install -r requirements.txt
+
+STEP 2: Setup YouTube Authentication
+-------------------------------------
+1. Get client_secret.json (see GET_CLIENT_SECRET_GUIDE.md)
+2. Place it in this folder
+3. Run the script once to authenticate
+
+STEP 3: Verify Audio Tracks
+----------------------------
+Make sure these files exist:
+- Track 1.mpeg ✓
+- Track 2.mpeg ✓
+
+STEP 4: Run the Script
+----------------------
+Double-click: run_instagram_snapchat.bat
+
+OR
+
+python instagram_snapchat_to_youtube.py
+
+========================================
+WHAT IT DOES
+========================================
+
+✓ Checks every 10 minutes for new content
+✓ Downloads from Instagram (@i.haiderr, @rajab.butt94)
+✓ Downloads from Snapchat (@i-haiderr, @rajab.butt7)
+✓ Converts images to videos with music
+✓ Adds "Lahori Twins" watermark
+✓ Skips videos with females
+✓ Skips copyrighted content
+✓ Uploads to YouTube (@LahoriTwins)
+✓ Deletes files after upload
+
+========================================
+ACCOUNTS MONITORED
+========================================
+
+Instagram:
+- @i.haiderr (posts, reels, stories)
+- @rajab.butt94 (posts, reels, stories)
+
+Snapchat:
+- @i-haiderr (snaps, stories, spotlights)
+- @rajab.butt7 (snaps, stories, spotlights)
+
+========================================
+CONFIGURATION
+========================================
+
+Edit config.json to change:
+- Watermark text
+- Female detection (on/off)
+- Video privacy (public/private)
+- Upload settings
+
+========================================
+TROUBLESHOOTING
+========================================
+
+Problem: "yt-dlp not installed"
+Solution: pip install yt-dlp
+
+Problem: "ffmpeg not installed"
+Solution: See INSTALL_FFMPEG_WINDOWS.txt
+
+Problem: "YouTube authentication failed"
+Solution: Run refresh_youtube_token.py
+
+Problem: "No audio tracks found"
+Solution: Make sure Track 1.mpeg and Track 2.mpeg are in this folder
+
+Problem: "DeepFace not installed"
+Solution: pip install deepface tf-keras
+
+========================================
+IMPORTANT NOTES
+========================================
+
+1. Keep the script running 24/7 for automatic monitoring
+2. Script checks every 10 minutes
+3. Files are deleted after upload to save space
+4. YouTube has a daily upload quota (6-10 videos/day)
+5. Instagram/Snapchat may block downloads - use VPN if needed
+
+========================================
+NEED HELP?
+========================================
+
+See detailed guide: INSTAGRAM_SNAPCHAT_SETUP.md
