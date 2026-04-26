@@ -35,7 +35,7 @@
     "add_watermark": true,
     "watermark_text": "Lahori Twins",
     "skip_female_videos": true,
-    "split_long_videos": true,
+    "split_long_videos": false,
     "split_duration_seconds": 38,
     "min_segment_duration_seconds": 0
   },

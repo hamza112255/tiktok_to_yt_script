@@ -173,7 +173,7 @@ class ContentDownloader:
                     'add_watermark': True,
                     'watermark_text': 'Lahori Twins',
                     'skip_female_videos': True,
-                    'split_long_videos': True,
+                    'split_long_videos': False,  # Disabled to save storage
                     'split_duration_seconds': 38
                 }
             }
@@ -202,11 +202,26 @@ class ContentDownloader:
         return hashlib.md5(url.encode()).hexdigest()[:12]
     
     def _check_copyright(self, text):
+        """Check if content has copyright indicators - IMPORTANT for avoiding strikes"""
         if not text:
             return False
+        
         text_lower = text.lower()
-        keywords = ['copyright', '©', '(c)', 'all rights reserved', 'copyrighted']
-        return any(k in text_lower for k in keywords)
+        
+        # Comprehensive copyright keywords
+        copyright_keywords = [
+            'copyright', '©', '(c)', 'all rights reserved', 'copyrighted',
+            'rights reserved', 'protected content', 'intellectual property',
+            'dmca', 'trademark', '™', '®', 'licensed content',
+            'unauthorized use', 'permission required', 'proprietary'
+        ]
+        
+        for keyword in copyright_keywords:
+            if keyword in text_lower:
+                print(f"⚠ Copyright keyword found: '{keyword}'")
+                return True
+        
+        return False
     
     def _image_to_video(self, img_path):
         try:
@@ -314,17 +329,19 @@ class ContentDownloader:
                     if not file_path:
                         continue
                 
-                # Process video
+                # Process video (female detection + watermark)
                 if self.processor:
                     should_skip, processed = self.processor.process_video(file_path)
                     
                     if should_skip:
-                        print(f"✗ Skipped: Female detected")
+                        print(f"✗ Skipped: Female detected in video")
                         self._cleanup(file_path)
                         continue
                     
                     videos_to_upload = processed
                 else:
+                    # No video processor - skip female detection
+                    print(f"⚠ Video processor unavailable - female detection disabled")
                     videos_to_upload = [file_path]
                 
                 # Upload each video
@@ -356,6 +373,11 @@ class ContentDownloader:
         print(f"{'='*60}")
         print(f"Check interval: {CHECK_INTERVAL//60} minutes")
         print(f"YouTube: @LahoriTwins")
+        print(f"\nFeatures:")
+        print(f"  ✓ Copyright detection: ENABLED")
+        print(f"  {'✓' if self.processor else '✗'} Female detection: {'ENABLED' if self.processor else 'DISABLED (no video processor)'}")
+        print(f"  ✓ Watermark: ENABLED")
+        print(f"  ✗ Video splitting: DISABLED (saves storage)")
         print(f"{'='*60}\n")
         
         while True:
