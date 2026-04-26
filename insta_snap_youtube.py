@@ -271,7 +271,7 @@ class ContentDownloader:
             if url_hash in self.processed:
                 return
             
-            print(f"\n→ Checking {platform} @{username}")
+            print(f"  → Checking {platform.capitalize()} @{username}")
             
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             temp_file = self.temp_dir / f"{timestamp}_{username}.%(ext)s"
@@ -385,14 +385,17 @@ class ContentDownloader:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking...")
                 
                 # Instagram
+                print(f"\n→ Checking Instagram accounts...")
                 for acc in ACCOUNTS['instagram']:
                     self.download_and_process(acc['url'], acc['user'], 'instagram')
                 
                 # Snapchat
+                print(f"\n→ Checking Snapchat accounts...")
                 for acc in ACCOUNTS['snapchat']:
                     self.download_and_process(acc['url'], acc['user'], 'snapchat')
                 
-                print(f"\n→ Next check in {CHECK_INTERVAL//60} minutes\n")
+                print(f"\n✓ Check complete - monitored {len(ACCOUNTS['instagram'])} Instagram + {len(ACCOUNTS['snapchat'])} Snapchat accounts")
+                print(f"→ Next check in {CHECK_INTERVAL//60} minutes\n")
                 time.sleep(CHECK_INTERVAL)
             
             except KeyboardInterrupt:
