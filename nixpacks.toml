@@ -1,0 +1,8 @@
+[phases.setup]
+aptPkgs = ['ffmpeg']
+
+[phases.install]
+cmds = ['pip install -r requirements-railway.txt']
+
+[start]
+cmd = 'python -u railway_runtime_setup.py && python -u instagram_to_youtube.py'
