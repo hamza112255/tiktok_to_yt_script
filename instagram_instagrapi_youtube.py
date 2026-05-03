@@ -53,9 +53,12 @@ INSTAGRAM_ACCOUNTS = [
     'rajab.butt94'
 ]
 
-# Instagram credentials (optional - works without login for public accounts)
+# Instagram credentials (optional - but recommended for better reliability)
 INSTAGRAM_USERNAME = os.getenv('INSTAGRAM_USERNAME', '')
 INSTAGRAM_PASSWORD = os.getenv('INSTAGRAM_PASSWORD', '')
+
+# Set to True to force no-login mode (for public accounts only)
+FORCE_NO_LOGIN = True
 
 DEFAULT_HASHTAGS = "#rajabfamily #rajabbutt #viralshorts #maandogar #shezi #haidershah #haiderlive #jahangir"
 CHECK_INTERVAL = 600  # 10 minutes
@@ -166,6 +169,11 @@ class InstagramDownloader:
     
     def _login(self):
         """Login to Instagram (optional for public accounts)"""
+        # Skip login if forced no-login mode
+        if FORCE_NO_LOGIN:
+            print("→ No-login mode enabled (public accounts only)")
+            return
+        
         session_file = BASE_DIR / 'instagrapi_session.json'
         
         # Try loading existing session
@@ -352,43 +360,43 @@ class InstagramDownloader:
                     
                     video_path = None
                     
-                    # Handle different media types
-                    if media.media_type == 2:  # Video or Reel
-                        video_path = self.client.video_download(media.pk, folder=self.temp_dir)
-                        print(f"  ✓ Downloaded video: {video_path.name}")
-                        
-                        # Add watermark
-                        video_path = self._add_watermark(video_path)
+                    # Build Instagram URL
+                    post_url = f"https://www.instagram.com/p/{media.code}/"
                     
-                    elif media.media_type == 1:  # Photo
-                        photo_path = self.client.photo_download(media.pk, folder=self.temp_dir)
-                        print(f"  ✓ Downloaded photo: {photo_path.name}")
-                        
-                        # Convert to video
-                        video_path = self._image_to_video(photo_path)
+                    # Use yt-dlp to download (works without login for public posts)
+                    output_template = str(self.temp_dir / f"{media.code}.%(ext)s")
                     
-                    elif media.media_type == 8:  # Carousel/Album
-                        print(f"  → Carousel with {media.resources.__len__()} items")
-                        
-                        # Download first video from carousel
-                        for resource in media.resources:
-                            if resource.media_type == 2:  # Video in carousel
-                                video_path = self.client.video_download(resource.pk, folder=self.temp_dir)
-                                print(f"  ✓ Downloaded video from carousel: {video_path.name}")
-                                
-                                # Add watermark
-                                video_path = self._add_watermark(video_path)
-                                break
-                            elif resource.media_type == 1:  # Photo in carousel
-                                photo_path = self.client.photo_download(resource.pk, folder=self.temp_dir)
-                                print(f"  ✓ Downloaded photo from carousel: {photo_path.name}")
-                                
-                                # Convert to video
-                                video_path = self._image_to_video(photo_path)
-                                break
+                    cmd = [
+                        'yt-dlp',
+                        '--no-warnings',
+                        '--quiet',
+                        '--no-check-certificate',
+                        '-f', 'best',
+                        '-o', output_template,
+                        post_url
+                    ]
                     
+                    result = run_cmd(cmd, timeout=120)
+                    
+                    # Find downloaded file
+                    downloaded_files = list(self.temp_dir.glob(f"{media.code}.*"))
+                    
+                    if downloaded_files:
+                        file_path = downloaded_files[0]
+                        print(f"  ✓ Downloaded: {file_path.name}")
+                        
+                        # Check if video or image
+                        if file_path.suffix.lower() in ['.mp4', '.mov', '.avi', '.webm']:
+                            video_path = file_path
+                            # Add watermark
+                            video_path = self._add_watermark(video_path)
+                        elif file_path.suffix.lower() in ['.jpg', '.jpeg', '.png', '.webp']:
+                            # Convert image to video
+                            video_path = self._image_to_video(file_path)
+                        else:
+                            print(f"  ⚠ Unknown file type: {file_path.suffix}")
                     else:
-                        print(f"  ⚠ Unknown media type: {media.media_type}")
+                        print(f"  ⚠ Download failed - file not found")
                     
                     if video_path and video_path.exists():
                         # Upload to YouTube
