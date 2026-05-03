@@ -77,12 +77,14 @@ class InstagramDownloaderAPI:
     def download_from_url(self, post_url):
         """Download Instagram video using third-party API"""
         
-        # Try multiple downloader services
+        # Try multiple downloader services (in order of reliability)
         downloaders = [
-            self._download_via_rapidapi,
+            self._download_via_snapinsta,
             self._download_via_downloadgram,
             self._download_via_inflact,
             self._download_via_saveinsta,
+            self._download_via_instadownloader,
+            self._download_via_rapidapi,
         ]
         
         for downloader in downloaders:
@@ -262,30 +264,46 @@ class InstagramDownloaderAPI:
             
             api_url = "https://snapinsta.app/api/ajaxSearch"
             
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Origin': 'https://snapinsta.app',
+                'Referer': 'https://snapinsta.app/'
+            }
+            
             data = {
                 'q': post_url,
+                't': 'media',
                 'lang': 'en'
             }
             
-            response = self.session.post(api_url, data=data, timeout=30)
+            response = self.session.post(api_url, headers=headers, data=data, timeout=30)
             
             if response.status_code == 200:
                 result = response.json()
                 
-                if result.get('status') == 'ok':
+                if result.get('status') == 'ok' or result.get('status') == 'success':
                     html = result.get('data', '')
                     
                     import re
-                    video_match = re.search(r'href="([^"]+)"[^>]*download', html, re.IGNORECASE)
+                    # Look for download link in the HTML response
+                    # SnapInsta returns HTML with download links
+                    video_match = re.search(r'href="([^"]+)"[^>]*class="[^"]*download[^"]*"', html, re.IGNORECASE)
+                    
+                    if not video_match:
+                        # Try alternative pattern
+                        video_match = re.search(r'href="(https://[^"]+\.cdninstagram\.com[^"]+)"', html)
                     
                     if video_match:
                         video_url = video_match.group(1)
+                        # Clean up the URL
+                        video_url = video_url.replace('&amp;', '&')
                         print(f"  ✓ Found video URL via SnapInsta")
                         return video_url
             
             return None
         except Exception as e:
-            print(f"  ⚠ SnapInsta error: {e}")
+            print(f"  ⚠ SnapInsta error: {str(e)[:100]}")
             return None
 
 class YouTubeUploader:
