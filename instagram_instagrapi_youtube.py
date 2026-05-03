@@ -362,6 +362,7 @@ class InstagramDownloader:
                     
                     # Build Instagram URL
                     post_url = f"https://www.instagram.com/p/{media.code}/"
+                    print(f"    URL: {post_url}")
                     
                     # Use yt-dlp to download (works without login for public posts)
                     output_template = str(self.temp_dir / f"{media.code}.%(ext)s")
@@ -369,14 +370,19 @@ class InstagramDownloader:
                     cmd = [
                         'yt-dlp',
                         '--no-warnings',
-                        '--quiet',
                         '--no-check-certificate',
+                        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                         '-f', 'best',
                         '-o', output_template,
+                        '--no-playlist',
+                        '--extractor-args', 'instagram:api=graphql',
                         post_url
                     ]
                     
                     result = run_cmd(cmd, timeout=120)
+                    
+                    if result.returncode != 0:
+                        print(f"  ⚠ yt-dlp error: {result.stderr[:200]}")
                     
                     # Find downloaded file
                     downloaded_files = list(self.temp_dir.glob(f"{media.code}.*"))
@@ -396,7 +402,8 @@ class InstagramDownloader:
                         else:
                             print(f"  ⚠ Unknown file type: {file_path.suffix}")
                     else:
-                        print(f"  ⚠ Download failed - file not found")
+                        print(f"  ⚠ Download failed - Instagram may be blocking Railway")
+                        print(f"  → This is expected from cloud platforms")
                     
                     if video_path and video_path.exists():
                         # Upload to YouTube
