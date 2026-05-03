@@ -377,13 +377,7 @@ class InstagramMonitor:
         
         self.audio_tracks = [BASE_DIR / 'Track 1.mpeg', BASE_DIR / 'Track 2.mpeg']
         
-        # Initialize Instagrapi (only for getting post URLs)
-        if INSTAGRAPI_AVAILABLE:
-            self.client = Client()
-            self.client.delay_range = [3, 7]
-            print("✓ Using Instagrapi for post discovery")
-        else:
-            self.client = None
+        print("✓ Using public scraper APIs (no Instagram blocking)")
     
     def _load_tracking(self):
         if self.tracking_file.exists():
@@ -456,31 +450,31 @@ class InstagramMonitor:
     
     def check_account(self, username):
         """Check Instagram account for new posts"""
-        if not self.client:
-            print(f"  ✗ Instagrapi not available")
-            return
-        
         try:
             print(f"\n→ Checking @{username}")
             
-            user_id = self.client.user_id_from_username(username)
-            medias = self.client.user_medias(user_id, amount=MAX_POSTS_PER_CHECK)
+            # Get recent posts using public scraper API instead of instagrapi
+            posts = self._get_posts_via_scraper(username)
             
-            print(f"  → Found {len(medias)} recent posts")
+            if not posts:
+                print(f"  ✗ Could not get posts")
+                return
+            
+            print(f"  → Found {len(posts)} recent posts")
             
             uploaded_count = 0
             
-            for media in medias:
-                media_pk = str(media.pk)
+            for post in posts[:MAX_POSTS_PER_CHECK]:
+                post_code = post.get('code')
                 
-                if media_pk in self.processed:
+                if not post_code or post_code in self.processed:
                     continue
                 
-                print(f"\n  → Post: {media.code}")
-                print(f"    Likes: {media.like_count}")
+                print(f"\n  → Post: {post_code}")
+                print(f"    Likes: {post.get('likes', 0)}")
                 
                 # Build Instagram URL
-                post_url = f"https://www.instagram.com/p/{media.code}/"
+                post_url = f"https://www.instagram.com/p/{post_code}/"
                 print(f"    URL: {post_url}")
                 
                 # Get video download URL from third-party API
@@ -488,14 +482,14 @@ class InstagramMonitor:
                 
                 if video_url:
                     # Download video file
-                    video_path = self._download_video_file(video_url, f"{media.code}.mp4")
+                    video_path = self._download_video_file(video_url, f"{post_code}.mp4")
                     
                     if video_path and video_path.exists():
                         # Add watermark
                         video_path = self._add_watermark(video_path)
                         
                         # Upload to YouTube
-                        caption = media.caption_text if media.caption_text else ""
+                        caption = post.get('caption', '')
                         title = caption[:80] if caption else f"{username} post"
                         desc = caption if caption else DEFAULT_HASHTAGS
                         
@@ -511,7 +505,7 @@ class InstagramMonitor:
                     print(f"  ✗ Could not get download URL")
                 
                 # Mark as processed
-                self.processed.append(media_pk)
+                self.processed.append(post_code)
                 self._save_tracking()
                 
                 if len(self.processed) > 1000:
@@ -527,6 +521,88 @@ class InstagramMonitor:
         
         except Exception as e:
             print(f"  ✗ Error: {e}")
+    
+    def _get_posts_via_scraper(self, username):
+        """Get posts using public scraper API (no Instagram API calls)"""
+        try:
+            # Try multiple public scraper APIs
+            scrapers = [
+                lambda: self._scrape_via_rapidapi(username),
+                lambda: self._scrape_via_apify(username),
+            ]
+            
+            for scraper in scrapers:
+                try:
+                    posts = scraper()
+                    if posts:
+                        return posts
+                except Exception as e:
+                    print(f"  ⚠ Scraper failed: {str(e)[:100]}")
+                    continue
+            
+            return []
+        except Exception as e:
+            print(f"  ✗ Scraper error: {e}")
+            return []
+    
+    def _scrape_via_rapidapi(self, username):
+        """Use RapidAPI Instagram scraper"""
+        try:
+            print(f"  → Getting posts via RapidAPI...")
+            
+            api_key = os.getenv('RAPIDAPI_KEY', '')
+            if not api_key:
+                print(f"  ⚠ No RapidAPI key")
+                return []
+            
+            url = f"https://instagram-scraper-api2.p.rapidapi.com/v1/posts"
+            
+            headers = {
+                'X-RapidAPI-Key': api_key,
+                'X-RapidAPI-Host': 'instagram-scraper-api2.p.rapidapi.com'
+            }
+            
+            params = {'username_or_id_or_url': username}
+            
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                posts = []
+                for item in result.get('data', {}).get('items', [])[:MAX_POSTS_PER_CHECK]:
+                    posts.append({
+                        'code': item.get('code'),
+                        'likes': item.get('like_count', 0),
+                        'caption': item.get('caption', {}).get('text', '')
+                    })
+                
+                if posts:
+                    print(f"  ✓ Got posts via RapidAPI")
+                    return posts
+            
+            return []
+        except Exception as e:
+            print(f"  ⚠ RapidAPI scraper error: {str(e)[:100]}")
+            return []
+    
+    def _scrape_via_apify(self, username):
+        """Use Apify Instagram scraper"""
+        try:
+            print(f"  → Getting posts via Apify...")
+            
+            # Apify requires API token
+            api_token = os.getenv('APIFY_TOKEN', '')
+            if not api_token:
+                print(f"  ⚠ No Apify token")
+                return []
+            
+            # This would require Apify setup
+            # Placeholder for now
+            return []
+        except Exception as e:
+            print(f"  ⚠ Apify error: {str(e)[:100]}")
+            return []
     
     def monitor(self):
         print(f"\n{'='*60}")
