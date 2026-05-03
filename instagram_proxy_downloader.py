@@ -79,6 +79,8 @@ class InstagramDownloaderAPI:
         
         # Try multiple downloader services (in order of reliability)
         downloaders = [
+            self._download_via_igram,
+            self._download_via_instafinsta,
             self._download_via_snapinsta,
             self._download_via_downloadgram,
             self._download_via_inflact,
@@ -144,28 +146,97 @@ class InstagramDownloaderAPI:
         try:
             print(f"  → Trying Downloadgram.com...")
             
-            api_url = "https://downloadgram.org/reel-downloader.php"
+            # Downloadgram has multiple domains, try them
+            domains = [
+                'https://downloadgram.org',
+                'https://downloadgram.com',
+                'https://www.downloadgram.com'
+            ]
+            
+            for domain in domains:
+                try:
+                    api_url = f"{domain}/reel-downloader.php"
+                    
+                    data = {
+                        'url': post_url,
+                        'submit': ''
+                    }
+                    
+                    response = self.session.post(api_url, data=data, timeout=30)
+                    
+                    if response.status_code == 200:
+                        import re
+                        # Look for video download link
+                        video_match = re.search(r'href="(https://[^"]+\.mp4[^"]*)"', response.text)
+                        
+                        if video_match:
+                            video_url = video_match.group(1)
+                            print(f"  ✓ Found video URL via Downloadgram")
+                            return video_url
+                except:
+                    continue
+            
+            return None
+        except Exception as e:
+            print(f"  ⚠ Downloadgram error: {str(e)[:100]}")
+            return None
+    
+    def _download_via_igram(self, post_url):
+        """iGram.io downloader"""
+        try:
+            print(f"  → Trying iGram.io...")
+            
+            api_url = "https://igram.io/api/conversion"
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
             
             data = {
-                'url': post_url,
-                'submit': ''
+                'url': post_url
+            }
+            
+            response = self.session.post(api_url, headers=headers, json=data, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                # Try to find video URL in response
+                if result.get('url'):
+                    video_url = result['url'][0] if isinstance(result['url'], list) else result['url']
+                    print(f"  ✓ Found video URL via iGram")
+                    return video_url
+            
+            return None
+        except Exception as e:
+            print(f"  ⚠ iGram error: {str(e)[:100]}")
+            return None
+    
+    def _download_via_instafinsta(self, post_url):
+        """InstaFinsta.com downloader"""
+        try:
+            print(f"  → Trying InstaFinsta.com...")
+            
+            api_url = "https://instafinsta.com/api/instagram"
+            
+            data = {
+                'url': post_url
             }
             
             response = self.session.post(api_url, data=data, timeout=30)
             
             if response.status_code == 200:
-                import re
-                # Look for video download link
-                video_match = re.search(r'href="(https://[^"]+\.mp4[^"]*)"', response.text)
+                result = response.json()
                 
-                if video_match:
-                    video_url = video_match.group(1)
-                    print(f"  ✓ Found video URL via Downloadgram")
+                if result.get('download_url'):
+                    video_url = result['download_url']
+                    print(f"  ✓ Found video URL via InstaFinsta")
                     return video_url
             
             return None
         except Exception as e:
-            print(f"  ⚠ Downloadgram error: {str(e)[:100]}")
+            print(f"  ⚠ InstaFinsta error: {str(e)[:100]}")
             return None
     
     def _download_via_inflact(self, post_url):
