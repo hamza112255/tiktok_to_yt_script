@@ -166,32 +166,46 @@ class InstagramDownloader:
                 dirname_pattern=str(self.temp_dir)
             )
             
-            # Try to load session from environment variable
-            session_b64 = os.getenv('INSTAGRAM_SESSION_B64')
-            session_username = os.getenv('INSTAGRAM_SESSION_USERNAME')
+            # Try to load session from file first (if exists from previous run)
+            instagram_username = os.getenv('INSTAGRAM_USERNAME', 'rebel_jallal')
+            session_file = BASE_DIR / f"session-{instagram_username}"
             
-            if session_b64 and session_username:
+            session_loaded = False
+            
+            # Try loading existing session file
+            if session_file.exists():
                 try:
-                    import base64
-                    print(f"→ Loading Instagram session for @{session_username}...")
-                    
-                    # Decode and save session file
-                    session_data = base64.b64decode(session_b64)
-                    session_file = BASE_DIR / f"session-{session_username}"
-                    session_file.write_bytes(session_data)
-                    
-                    # Load session
-                    self.loader.load_session_from_file(session_username, str(session_file))
-                    print("✓ Instagram session loaded successfully")
-                    
+                    print(f"→ Loading existing session for @{instagram_username}...")
+                    self.loader.load_session_from_file(instagram_username, str(session_file))
+                    print("✓ Session loaded from file")
+                    session_loaded = True
                 except Exception as e:
-                    print(f"⚠ Session load failed: {e}")
-                    print("→ Will try direct login...")
-                    self._try_direct_login()
-            else:
-                print("⚠ No Instagram session provided")
-                print("→ Set INSTAGRAM_SESSION_B64 and INSTAGRAM_SESSION_USERNAME in Railway")
-                print("→ Or set INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD")
+                    print(f"⚠ Session file load failed: {e}")
+            
+            # Try loading session from environment variable
+            if not session_loaded:
+                session_b64 = os.getenv('INSTAGRAM_SESSION_B64')
+                session_username = os.getenv('INSTAGRAM_SESSION_USERNAME', instagram_username)
+                
+                if session_b64:
+                    try:
+                        import base64
+                        print(f"→ Loading Instagram session from environment...")
+                        
+                        # Decode and save session file
+                        session_data = base64.b64decode(session_b64)
+                        session_file = BASE_DIR / f"session-{session_username}"
+                        session_file.write_bytes(session_data)
+                        
+                        # Load session
+                        self.loader.load_session_from_file(session_username, str(session_file))
+                        print("✓ Instagram session loaded successfully")
+                        session_loaded = True
+                    except Exception as e:
+                        print(f"⚠ Session load failed: {e}")
+            
+            # If no session loaded, try direct login
+            if not session_loaded:
                 self._try_direct_login()
             
             print("✓ Instaloader initialized")
@@ -201,14 +215,19 @@ class InstagramDownloader:
     
     def _try_direct_login(self):
         """Try direct login with username/password"""
-        instagram_username = os.getenv('INSTAGRAM_USERNAME')
-        instagram_password = os.getenv('INSTAGRAM_PASSWORD')
+        instagram_username = os.getenv('INSTAGRAM_USERNAME', 'rebel_jallal')
+        instagram_password = os.getenv('INSTAGRAM_PASSWORD', 'RebelJallal123')
         
         if instagram_username and instagram_password:
             try:
                 print(f"→ Logging into Instagram as @{instagram_username}...")
                 self.loader.login(instagram_username, instagram_password)
                 print("✓ Instagram login successful")
+                
+                # Save session for reuse
+                session_file = BASE_DIR / f"session-{instagram_username}"
+                self.loader.save_session_to_file(str(session_file))
+                print(f"✓ Session saved to {session_file.name}")
             except Exception as e:
                 print(f"⚠ Instagram login failed: {e}")
                 print("→ Will try without authentication (may be blocked)")
@@ -334,8 +353,29 @@ class InstagramDownloader:
         try:
             print(f"\n→ Checking Instagram @{username}")
             
-            # Get profile
-            profile = instaloader.Profile.from_username(self.loader.context, username)
+            # Get profile with retry logic
+            max_retries = 3
+            profile = None
+            
+            for attempt in range(max_retries):
+                try:
+                    profile = instaloader.Profile.from_username(self.loader.context, username)
+                    break
+                except instaloader.exceptions.ConnectionException as e:
+                    if '403' in str(e) or 'Forbidden' in str(e):
+                        if attempt < max_retries - 1:
+                            wait_time = (attempt + 1) * 30
+                            print(f"  ⚠ 403 error, waiting {wait_time}s before retry...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"  ✗ Profile blocked after {max_retries} attempts")
+                            return
+                    else:
+                        raise
+            
+            if not profile:
+                print(f"  ✗ Could not load profile")
+                return
             
             print(f"  → Profile found: {profile.full_name}")
             print(f"  → Posts: {profile.mediacount}")
@@ -366,9 +406,13 @@ class InstagramDownloader:
                     self._save_tracking()
                     continue
                 
-                # Download post
+                # Download post with retry
                 try:
                     print(f"  → Downloading...")
+                    
+                    # Add delay before download to avoid rate limiting
+                    time.sleep(random.randint(3, 8))
+                    
                     self.loader.download_post(post, target=str(self.temp_dir / username))
                     
                     # Find downloaded files
@@ -421,9 +465,16 @@ class InstagramDownloader:
                         self.processed = self.processed[-1000:]
                         self._save_tracking()
                     
-                    # Small delay between posts
-                    time.sleep(5)
+                    # Delay between posts
+                    time.sleep(random.randint(10, 20))
                 
+                except instaloader.exceptions.ConnectionException as e:
+                    if '429' in str(e) or 'rate limit' in str(e).lower():
+                        print(f"  ⚠ Rate limited, waiting 5 minutes...")
+                        time.sleep(300)
+                    else:
+                        print(f"  ✗ Error downloading post: {e}")
+                    continue
                 except Exception as e:
                     print(f"  ✗ Error downloading post: {e}")
                     continue
@@ -437,6 +488,9 @@ class InstagramDownloader:
             print(f"  ✗ Profile @{username} not found")
         except instaloader.exceptions.PrivateProfileNotFollowedException:
             print(f"  ✗ Profile @{username} is private")
+        except instaloader.exceptions.LoginRequiredException:
+            print(f"  ✗ Login required to access @{username}")
+            print(f"  → Make sure INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD are set")
         except Exception as e:
             print(f"  ✗ Error: {e}")
     
