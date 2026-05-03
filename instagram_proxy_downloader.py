@@ -513,6 +513,38 @@ class InstagramMonitor:
             print(f"  ✗ Download error: {e}")
             return None
     
+    def _download_with_ytdlp(self, post_url, post_code):
+        """Download using yt-dlp as fallback"""
+        try:
+            output_template = str(self.temp_dir / f"{post_code}.%(ext)s")
+            
+            cmd = [
+                'yt-dlp',
+                '--no-warnings',
+                '--no-check-certificate',
+                '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                '-f', 'best',
+                '-o', output_template,
+                '--no-playlist',
+                post_url
+            ]
+            
+            result = run_cmd(cmd, timeout=120)
+            
+            # Find downloaded file
+            downloaded_files = list(self.temp_dir.glob(f"{post_code}.*"))
+            
+            if downloaded_files:
+                print(f"  ✓ Downloaded via yt-dlp: {downloaded_files[0].name}")
+                return downloaded_files[0]
+            else:
+                print(f"  ⚠ yt-dlp download failed")
+            
+            return None
+        except Exception as e:
+            print(f"  ✗ yt-dlp error: {str(e)[:100]}")
+            return None
+    
     def _add_watermark(self, video_path):
         """Add watermark"""
         try:
@@ -576,11 +608,17 @@ class InstagramMonitor:
                 # Get video download URL from third-party API
                 video_url = self.downloader_api.download_from_url(post_url)
                 
+                video_path = None
+                
                 if video_url:
-                    # Download video file
+                    # Download video file from URL
                     video_path = self._download_video_file(video_url, f"{post_code}.mp4")
-                    
-                    if video_path and video_path.exists():
+                else:
+                    # Fallback: Try yt-dlp directly (may work for some posts)
+                    print(f"  → Trying yt-dlp as fallback...")
+                    video_path = self._download_with_ytdlp(post_url, post_code)
+                
+                if video_path and video_path.exists():
                         # Add watermark
                         video_path = self._add_watermark(video_path)
                         
