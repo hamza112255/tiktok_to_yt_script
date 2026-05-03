@@ -15,7 +15,18 @@ if errorlevel 1 (
 echo.
 
 echo Installing required packages...
-pip install instaloader google-auth google-auth-oauthlib google-api-python-client
+echo Trying pip...
+pip install instaloader google-auth google-auth-oauthlib google-api-python-client 2>nul
+if errorlevel 1 (
+    echo pip not found, trying python -m pip...
+    python -m pip install instaloader google-auth google-auth-oauthlib google-api-python-client
+    if errorlevel 1 (
+        echo ERROR: Could not install packages!
+        echo Please run manually: python -m pip install instaloader google-auth google-auth-oauthlib google-api-python-client
+        pause
+        exit /b 1
+    )
+)
 echo.
 
 echo Checking FFmpeg...
