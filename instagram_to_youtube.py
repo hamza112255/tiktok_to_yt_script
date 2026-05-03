@@ -153,7 +153,7 @@ class InstagramDownloader:
         
         self.audio_tracks = [BASE_DIR / 'Track 1.mpeg', BASE_DIR / 'Track 2.mpeg']
         
-        # Initialize Instaloader
+        # Initialize Instaloader with session
         if INSTALOADER_AVAILABLE:
             self.loader = instaloader.Instaloader(
                 download_videos=True,
@@ -165,6 +165,24 @@ class InstagramDownloader:
                 post_metadata_txt_pattern='',
                 dirname_pattern=str(self.temp_dir)
             )
+            
+            # Try to login if credentials are provided
+            instagram_username = os.getenv('INSTAGRAM_USERNAME')
+            instagram_password = os.getenv('INSTAGRAM_PASSWORD')
+            
+            if instagram_username and instagram_password:
+                try:
+                    print(f"→ Logging into Instagram as @{instagram_username}...")
+                    self.loader.login(instagram_username, instagram_password)
+                    print("✓ Instagram login successful")
+                except Exception as e:
+                    print(f"⚠ Instagram login failed: {e}")
+                    print("→ Will try without authentication (may be blocked)")
+            else:
+                print("⚠ No Instagram credentials provided")
+                print("→ Set INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD in Railway")
+                print("→ Will try without authentication (may be blocked)")
+            
             print("✓ Instaloader initialized")
         else:
             self.loader = None
