@@ -555,31 +555,54 @@ class InstagramMonitor:
                 print(f"  ⚠ No RapidAPI key")
                 return []
             
-            url = f"https://instagram-scraper-api2.p.rapidapi.com/v1/posts"
+            # Using Instagram Scraper Stable API
+            url = f"https://instagram-scraper-stable-api.p.rapidapi.com/get_user_followers_v2.php"
             
             headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
                 'X-RapidAPI-Key': api_key,
-                'X-RapidAPI-Host': 'instagram-scraper-api2.p.rapidapi.com'
+                'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
             }
             
-            params = {'username_or_id_or_url': username}
+            # Get user's recent posts
+            data = {
+                'username_or_url': f'https://www.instagram.com/{username}/',
+                'data': 'following',
+                'amount': str(MAX_POSTS_PER_CHECK),
+                'pagination_token': ''
+            }
             
-            response = requests.get(url, headers=headers, params=params, timeout=30)
+            response = requests.post(url, headers=headers, data=data, timeout=30)
             
             if response.status_code == 200:
                 result = response.json()
                 
+                # Try to extract posts from response
                 posts = []
-                for item in result.get('data', {}).get('items', [])[:MAX_POSTS_PER_CHECK]:
-                    posts.append({
-                        'code': item.get('code'),
-                        'likes': item.get('like_count', 0),
-                        'caption': item.get('caption', {}).get('text', '')
-                    })
+                
+                # The API structure may vary, try different paths
+                items = result.get('data', {}).get('items', [])
+                if not items:
+                    items = result.get('items', [])
+                if not items:
+                    items = result.get('posts', [])
+                
+                for item in items[:MAX_POSTS_PER_CHECK]:
+                    code = item.get('code') or item.get('shortcode') or item.get('id')
+                    if code:
+                        posts.append({
+                            'code': code,
+                            'likes': item.get('like_count', 0) or item.get('likes', 0),
+                            'caption': item.get('caption', {}).get('text', '') or item.get('caption', '')
+                        })
                 
                 if posts:
-                    print(f"  ✓ Got posts via RapidAPI")
+                    print(f"  ✓ Got {len(posts)} posts via RapidAPI")
                     return posts
+                else:
+                    print(f"  ⚠ No posts found in API response")
+            else:
+                print(f"  ⚠ API returned status {response.status_code}")
             
             return []
         except Exception as e:
