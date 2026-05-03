@@ -49,8 +49,9 @@ except ImportError:
 
 # Instagram accounts to monitor
 INSTAGRAM_ACCOUNTS = [
-    'i.haiderr',
-    'rajab.butt94'
+    'rebel_jallal',  # Your own account
+    # 'i.haiderr',    # Commented out - other accounts
+    # 'rajab.butt94'  # Commented out - other accounts
 ]
 
 DEFAULT_HASHTAGS = "#rajabfamily #rajabbutt #viralshorts #maandogar #shezi #haidershah #haiderlive #jahangir"
