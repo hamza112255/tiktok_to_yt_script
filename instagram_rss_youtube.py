@@ -62,12 +62,6 @@ INSTAGRAM_ACCOUNTS = [
     'rajab.butt94'
 ]
 
-# RSS Feed URLs (using RSSHub)
-RSS_FEEDS = [
-    'https://rsshub.app/instagram/user/i.haiderr',
-    'https://rsshub.app/instagram/user/rajab.butt94'
-]
-
 DEFAULT_HASHTAGS = "#rajabfamily #rajabbutt #viralshorts #maandogar #shezi #haidershah #haiderlive #jahangir"
 CHECK_INTERVAL = 600  # 10 minutes
 MAX_POSTS_PER_CHECK = 3
@@ -332,11 +326,34 @@ class InstagramRSSDownloader:
         try:
             print(f"\n→ Checking RSS feed for @{username}")
             
-            # Fetch RSS feed
-            feed = feedparser.parse(feed_url)
+            # Try multiple RSS services
+            rss_services = [
+                f'https://rsshub.app/instagram/user/{username}',
+                f'https://rss.app/feeds/v1.1/_instagram_{username}.rss',
+                f'https://rsshub.rssforever.com/instagram/user/{username}',
+            ]
             
-            if not feed.entries:
-                print(f"  ⚠ No entries in RSS feed")
+            feed = None
+            for service_url in rss_services:
+                try:
+                    print(f"  → Trying: {service_url}")
+                    feed = feedparser.parse(service_url)
+                    if feed.entries:
+                        print(f"  ✓ RSS service working!")
+                        break
+                    else:
+                        print(f"  ⚠ No entries from this service")
+                except Exception as e:
+                    print(f"  ⚠ Service failed: {e}")
+                    continue
+            
+            if not feed or not feed.entries:
+                print(f"  ⚠ No entries in any RSS feed")
+                print(f"  → This could mean:")
+                print(f"     - Account is private")
+                print(f"     - RSS services are down")
+                print(f"     - Account has no recent posts")
+                print(f"  → Will try again in 10 minutes")
                 return
             
             print(f"  → Found {len(feed.entries)} entries in feed")
@@ -450,8 +467,8 @@ class InstagramRSSDownloader:
             try:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking all RSS feeds...")
                 
-                for feed_url, username in zip(RSS_FEEDS, INSTAGRAM_ACCOUNTS):
-                    self.check_rss_feed(feed_url, username)
+                for username in INSTAGRAM_ACCOUNTS:
+                    self.check_rss_feed(None, username)
                     time.sleep(10)  # Delay between feeds
                 
                 print(f"\n→ Next check in {CHECK_INTERVAL//60} minutes\n")
