@@ -79,9 +79,10 @@ class InstagramDownloaderAPI:
         
         # Try multiple downloader services
         downloaders = [
+            self._download_via_rapidapi,
+            self._download_via_downloadgram,
+            self._download_via_inflact,
             self._download_via_saveinsta,
-            self._download_via_instadownloader,
-            self._download_via_snapinsta,
         ]
         
         for downloader in downloaders:
@@ -90,10 +91,106 @@ class InstagramDownloaderAPI:
                 if video_url:
                     return video_url
             except Exception as e:
-                print(f"  ⚠ Downloader failed: {e}")
+                print(f"  ⚠ Downloader failed: {str(e)[:100]}")
                 continue
         
         return None
+    
+    def _download_via_rapidapi(self, post_url):
+        """RapidAPI Instagram Downloader (free tier)"""
+        try:
+            print(f"  → Trying RapidAPI...")
+            
+            # Extract shortcode from URL
+            import re
+            match = re.search(r'/p/([A-Za-z0-9_-]+)', post_url)
+            if not match:
+                return None
+            
+            shortcode = match.group(1)
+            
+            api_url = f"https://instagram-downloader-download-instagram-videos-stories.p.rapidapi.com/index"
+            
+            headers = {
+                'X-RapidAPI-Key': os.getenv('RAPIDAPI_KEY', ''),
+                'X-RapidAPI-Host': 'instagram-downloader-download-instagram-videos-stories.p.rapidapi.com'
+            }
+            
+            params = {'url': post_url}
+            
+            if not headers['X-RapidAPI-Key']:
+                print(f"  ⚠ No RapidAPI key (set RAPIDAPI_KEY env var)")
+                return None
+            
+            response = self.session.get(api_url, headers=headers, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                if result.get('media'):
+                    video_url = result['media']
+                    print(f"  ✓ Found video URL via RapidAPI")
+                    return video_url
+            
+            return None
+        except Exception as e:
+            print(f"  ⚠ RapidAPI error: {str(e)[:100]}")
+            return None
+    
+    def _download_via_downloadgram(self, post_url):
+        """Downloadgram.com"""
+        try:
+            print(f"  → Trying Downloadgram.com...")
+            
+            api_url = "https://downloadgram.org/reel-downloader.php"
+            
+            data = {
+                'url': post_url,
+                'submit': ''
+            }
+            
+            response = self.session.post(api_url, data=data, timeout=30)
+            
+            if response.status_code == 200:
+                import re
+                # Look for video download link
+                video_match = re.search(r'href="(https://[^"]+\.mp4[^"]*)"', response.text)
+                
+                if video_match:
+                    video_url = video_match.group(1)
+                    print(f"  ✓ Found video URL via Downloadgram")
+                    return video_url
+            
+            return None
+        except Exception as e:
+            print(f"  ⚠ Downloadgram error: {str(e)[:100]}")
+            return None
+    
+    def _download_via_inflact(self, post_url):
+        """Inflact.com downloader"""
+        try:
+            print(f"  → Trying Inflact.com...")
+            
+            api_url = "https://inflact.com/downloader/instagram/video"
+            
+            data = {
+                'url': post_url
+            }
+            
+            response = self.session.post(api_url, data=data, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                if result.get('url'):
+                    video_url = result['url']
+                    print(f"  ✓ Found video URL via Inflact")
+                    return video_url
+            
+            return None
+        except Exception as e:
+            print(f"  ⚠ Inflact error: {str(e)[:100]}")
+            return None
     
     def _download_via_saveinsta(self, post_url):
         """SaveInsta.app API"""
