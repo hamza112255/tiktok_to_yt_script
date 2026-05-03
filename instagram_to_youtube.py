@@ -166,27 +166,54 @@ class InstagramDownloader:
                 dirname_pattern=str(self.temp_dir)
             )
             
-            # Try to login if credentials are provided
-            instagram_username = os.getenv('INSTAGRAM_USERNAME')
-            instagram_password = os.getenv('INSTAGRAM_PASSWORD')
+            # Try to load session from environment variable
+            session_b64 = os.getenv('INSTAGRAM_SESSION_B64')
+            session_username = os.getenv('INSTAGRAM_SESSION_USERNAME')
             
-            if instagram_username and instagram_password:
+            if session_b64 and session_username:
                 try:
-                    print(f"→ Logging into Instagram as @{instagram_username}...")
-                    self.loader.login(instagram_username, instagram_password)
-                    print("✓ Instagram login successful")
+                    import base64
+                    print(f"→ Loading Instagram session for @{session_username}...")
+                    
+                    # Decode and save session file
+                    session_data = base64.b64decode(session_b64)
+                    session_file = BASE_DIR / f"session-{session_username}"
+                    session_file.write_bytes(session_data)
+                    
+                    # Load session
+                    self.loader.load_session_from_file(session_username, str(session_file))
+                    print("✓ Instagram session loaded successfully")
+                    
                 except Exception as e:
-                    print(f"⚠ Instagram login failed: {e}")
-                    print("→ Will try without authentication (may be blocked)")
+                    print(f"⚠ Session load failed: {e}")
+                    print("→ Will try direct login...")
+                    self._try_direct_login()
             else:
-                print("⚠ No Instagram credentials provided")
-                print("→ Set INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD in Railway")
-                print("→ Will try without authentication (may be blocked)")
+                print("⚠ No Instagram session provided")
+                print("→ Set INSTAGRAM_SESSION_B64 and INSTAGRAM_SESSION_USERNAME in Railway")
+                print("→ Or set INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD")
+                self._try_direct_login()
             
             print("✓ Instaloader initialized")
         else:
             self.loader = None
             print("✗ Instaloader not available")
+    
+    def _try_direct_login(self):
+        """Try direct login with username/password"""
+        instagram_username = os.getenv('INSTAGRAM_USERNAME')
+        instagram_password = os.getenv('INSTAGRAM_PASSWORD')
+        
+        if instagram_username and instagram_password:
+            try:
+                print(f"→ Logging into Instagram as @{instagram_username}...")
+                self.loader.login(instagram_username, instagram_password)
+                print("✓ Instagram login successful")
+            except Exception as e:
+                print(f"⚠ Instagram login failed: {e}")
+                print("→ Will try without authentication (may be blocked)")
+        else:
+            print("→ Will try without authentication (may be blocked)")
     
     def _load_tracking(self):
         if self.tracking_file.exists():
