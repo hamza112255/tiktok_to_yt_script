@@ -555,58 +555,67 @@ class InstagramMonitor:
                 print(f"  ⚠ No RapidAPI key")
                 return []
             
-            # Using Instagram Scraper Stable API
-            url = f"https://instagram-scraper-stable-api.p.rapidapi.com/get_user_followers_v2.php"
+            # Try to get user posts - we'll construct URLs manually since API might not have posts endpoint
+            # Instead, we'll use a simpler approach: just get the latest post codes from the profile
+            
+            # For now, let's use a workaround: manually construct post URLs
+            # This is a limitation of the free API tier
+            
+            print(f"  ⚠ RapidAPI endpoint doesn't support post listing")
+            print(f"  → Trying alternative method...")
+            
+            # Alternative: Use public Instagram profile page scraping
+            return self._scrape_public_profile(username)
+            
+        except Exception as e:
+            print(f"  ⚠ RapidAPI scraper error: {str(e)[:100]}")
+            return []
+    
+    def _scrape_public_profile(self, username):
+        """Scrape public Instagram profile page directly"""
+        try:
+            print(f"  → Scraping public profile page...")
+            
+            url = f"https://www.instagram.com/{username}/"
             
             headers = {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-RapidAPI-Key': api_key,
-                'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
             }
             
-            # Get user's recent posts
-            data = {
-                'username_or_url': f'https://www.instagram.com/{username}/',
-                'data': 'following',
-                'amount': str(MAX_POSTS_PER_CHECK),
-                'pagination_token': ''
-            }
-            
-            response = requests.post(url, headers=headers, data=data, timeout=30)
+            response = requests.get(url, headers=headers, timeout=30)
             
             if response.status_code == 200:
-                result = response.json()
+                import re
                 
-                # Try to extract posts from response
-                posts = []
+                # Extract post shortcodes from the page
+                # Instagram embeds data in script tags
+                shortcode_pattern = r'"shortcode":"([A-Za-z0-9_-]+)"'
+                shortcodes = re.findall(shortcode_pattern, response.text)
                 
-                # The API structure may vary, try different paths
-                items = result.get('data', {}).get('items', [])
-                if not items:
-                    items = result.get('items', [])
-                if not items:
-                    items = result.get('posts', [])
-                
-                for item in items[:MAX_POSTS_PER_CHECK]:
-                    code = item.get('code') or item.get('shortcode') or item.get('id')
-                    if code:
+                if shortcodes:
+                    # Remove duplicates and take first few
+                    unique_codes = list(dict.fromkeys(shortcodes))[:MAX_POSTS_PER_CHECK]
+                    
+                    posts = []
+                    for code in unique_codes:
                         posts.append({
                             'code': code,
-                            'likes': item.get('like_count', 0) or item.get('likes', 0),
-                            'caption': item.get('caption', {}).get('text', '') or item.get('caption', '')
+                            'likes': 0,
+                            'caption': ''
                         })
-                
-                if posts:
-                    print(f"  ✓ Got {len(posts)} posts via RapidAPI")
+                    
+                    print(f"  ✓ Found {len(posts)} posts from profile page")
                     return posts
                 else:
-                    print(f"  ⚠ No posts found in API response")
+                    print(f"  ⚠ No posts found on profile page")
             else:
-                print(f"  ⚠ API returned status {response.status_code}")
+                print(f"  ⚠ Profile page returned status {response.status_code}")
             
             return []
         except Exception as e:
-            print(f"  ⚠ RapidAPI scraper error: {str(e)[:100]}")
+            print(f"  ⚠ Profile scraping error: {str(e)[:100]}")
             return []
     
     def _scrape_via_apify(self, username):
