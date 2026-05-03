@@ -7,3 +7,5 @@ opencv-python-headless
 numpy
 pillow
 instaloader
+feedparser
+requests
