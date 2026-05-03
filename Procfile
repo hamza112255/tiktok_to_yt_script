@@ -1,3 +1,3 @@
-# Instagram to YouTube using Instagrapi (Fastest library!)
-web: python -u railway_runtime_setup.py && python -u instagram_instagrapi_youtube.py
+# Instagram to YouTube using Third-Party Downloader APIs
+web: python -u railway_runtime_setup.py && python -u instagram_proxy_downloader.py
 
