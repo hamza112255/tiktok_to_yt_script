@@ -159,7 +159,7 @@ class InstagramDownloader:
         
         # Initialize Instagrapi client
         self.client = Client()
-        self.client.delay_range = [1, 3]  # Random delay between requests
+        self.client.delay_range = [3, 7]  # Longer delay to avoid rate limiting
         
         # Try to login (optional for public accounts)
         self._login()
@@ -352,7 +352,7 @@ class InstagramDownloader:
                     
                     video_path = None
                     
-                    # Download video
+                    # Handle different media types
                     if media.media_type == 2:  # Video or Reel
                         video_path = self.client.video_download(media.pk, folder=self.temp_dir)
                         print(f"  ✓ Downloaded video: {video_path.name}")
@@ -360,13 +360,35 @@ class InstagramDownloader:
                         # Add watermark
                         video_path = self._add_watermark(video_path)
                     
-                    # Download photo
                     elif media.media_type == 1:  # Photo
                         photo_path = self.client.photo_download(media.pk, folder=self.temp_dir)
                         print(f"  ✓ Downloaded photo: {photo_path.name}")
                         
                         # Convert to video
                         video_path = self._image_to_video(photo_path)
+                    
+                    elif media.media_type == 8:  # Carousel/Album
+                        print(f"  → Carousel with {media.resources.__len__()} items")
+                        
+                        # Download first video from carousel
+                        for resource in media.resources:
+                            if resource.media_type == 2:  # Video in carousel
+                                video_path = self.client.video_download(resource.pk, folder=self.temp_dir)
+                                print(f"  ✓ Downloaded video from carousel: {video_path.name}")
+                                
+                                # Add watermark
+                                video_path = self._add_watermark(video_path)
+                                break
+                            elif resource.media_type == 1:  # Photo in carousel
+                                photo_path = self.client.photo_download(resource.pk, folder=self.temp_dir)
+                                print(f"  ✓ Downloaded photo from carousel: {photo_path.name}")
+                                
+                                # Convert to video
+                                video_path = self._image_to_video(photo_path)
+                                break
+                    
+                    else:
+                        print(f"  ⚠ Unknown media type: {media.media_type}")
                     
                     if video_path and video_path.exists():
                         # Upload to YouTube
@@ -391,11 +413,14 @@ class InstagramDownloader:
                         self.processed = self.processed[-1000:]
                         self._save_tracking()
                     
-                    # Delay between posts
-                    time.sleep(random.randint(5, 10))
+                    # Longer delay between posts to avoid rate limiting
+                    time.sleep(random.randint(15, 30))
                 
                 except Exception as e:
                     print(f"  ✗ Error downloading: {e}")
+                    # Mark as processed even if failed to avoid retrying
+                    self.processed.append(media_pk)
+                    self._save_tracking()
                     continue
             
             if downloaded_count > 0:
@@ -437,7 +462,7 @@ class InstagramDownloader:
                 
                 for username in INSTAGRAM_ACCOUNTS:
                     self.download_from_account(username)
-                    time.sleep(10)  # Delay between accounts
+                    time.sleep(30)  # Longer delay between accounts to avoid rate limiting
                 
                 print(f"\n→ Next check in {CHECK_INTERVAL//60} minutes\n")
                 time.sleep(CHECK_INTERVAL)
