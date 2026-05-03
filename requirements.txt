@@ -9,3 +9,4 @@ pillow
 instaloader
 feedparser
 requests
+instagrapi
