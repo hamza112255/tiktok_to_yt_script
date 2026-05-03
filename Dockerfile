@@ -20,8 +20,7 @@ COPY requirements-railway.txt .
 RUN pip install --no-cache-dir -r requirements-railway.txt
 
 # Copy application files
-COPY insta_snap_youtube.py .
-COPY video_processor.py .
+COPY instagram_to_youtube.py .
 COPY railway_runtime_setup.py .
 COPY config.defaults.json .
 COPY .gitignore .
@@ -31,4 +30,4 @@ COPY Track*.mpeg .
 RUN mkdir -p downloaded_videos youtube_ready
 
 # Run the application
-CMD ["sh", "-c", "python -u railway_runtime_setup.py && python -u insta_snap_youtube.py"]
+CMD ["sh", "-c", "python -u railway_runtime_setup.py && python -u instagram_to_youtube.py"]

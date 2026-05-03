@@ -1,0 +1,15 @@
+# Instagram & Snapchat URLs to Download
+# Add one URL per line
+# The script will download, process, and upload to YouTube
+
+# Instagram Posts (example format):
+# https://www.instagram.com/p/ABC123/
+
+# Instagram Reels (example format):
+# https://www.instagram.com/reel/XYZ789/
+
+# Snapchat (example format):
+# https://snapchat.com/t/7kaE0AsS
+
+# Add your URLs below:
+
