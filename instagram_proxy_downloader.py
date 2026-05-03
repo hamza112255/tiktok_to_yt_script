@@ -471,8 +471,15 @@ class InstagramMonitor:
         try:
             print(f"\n→ Checking @{username}")
             
-            # Get recent posts using public scraper API instead of instagrapi
+            # Try to get posts using multiple methods
+            posts = []
+            
+            # Method 1: Try Apify first (if token available)
             posts = self._get_posts_via_scraper(username)
+            
+            # Method 2: If no posts yet, try instagrapi (may get rate limited but worth trying)
+            if not posts:
+                posts = self._get_posts_via_instagrapi(username)
             
             if not posts:
                 print(f"  ✗ Could not get posts")
@@ -539,6 +546,47 @@ class InstagramMonitor:
         
         except Exception as e:
             print(f"  ✗ Error: {e}")
+    
+    def _get_posts_via_instagrapi(self, username):
+        """Try to get posts using instagrapi (may get rate limited)"""
+        try:
+            if not INSTAGRAPI_AVAILABLE:
+                return []
+            
+            print(f"  → Trying instagrapi...")
+            
+            # Initialize client if not exists
+            if not hasattr(self, 'insta_client'):
+                from instagrapi import Client
+                self.insta_client = Client()
+                self.insta_client.delay_range = [5, 10]  # Longer delays
+            
+            # Get user ID and posts
+            user_id = self.insta_client.user_id_from_username(username)
+            medias = self.insta_client.user_medias(user_id, amount=MAX_POSTS_PER_CHECK)
+            
+            posts = []
+            for media in medias:
+                posts.append({
+                    'code': media.code,
+                    'likes': media.like_count,
+                    'caption': media.caption_text if media.caption_text else ''
+                })
+            
+            if posts:
+                print(f"  ✓ Got {len(posts)} posts via instagrapi")
+            
+            return posts
+            
+        except Exception as e:
+            error_msg = str(e)
+            if '429' in error_msg:
+                print(f"  ⚠ Rate limited by Instagram (429)")
+            elif 'too many' in error_msg.lower():
+                print(f"  ⚠ Too many requests - Instagram blocking")
+            else:
+                print(f"  ⚠ Instagrapi error: {error_msg[:100]}")
+            return []
     
     def _get_posts_via_scraper(self, username):
         """Get posts using public scraper API (no Instagram API calls)"""
