@@ -619,18 +619,90 @@ class InstagramMonitor:
             return []
     
     def _scrape_via_apify(self, username):
-        """Use Apify Instagram scraper"""
+        """Use Apify Instagram scraper (has free tier!)"""
         try:
-            print(f"  → Getting posts via Apify...")
+            print(f"  → Getting posts via Apify (free tier)...")
             
-            # Apify requires API token
+            # Apify has a free tier with 5 USD credit per month
+            # Sign up at https://apify.com
             api_token = os.getenv('APIFY_TOKEN', '')
             if not api_token:
-                print(f"  ⚠ No Apify token")
+                print(f"  ⚠ No Apify token (sign up free at https://apify.com)")
                 return []
             
-            # This would require Apify setup
-            # Placeholder for now
+            # Use Apify's Instagram Profile Scraper
+            # Actor ID: apify/instagram-profile-scraper
+            
+            import requests
+            
+            # Start the actor run
+            actor_url = "https://api.apify.com/v2/acts/apify~instagram-profile-scraper/runs"
+            
+            params = {
+                'token': api_token
+            }
+            
+            data = {
+                "directUrls": [f"https://www.instagram.com/{username}/"],
+                "resultsLimit": MAX_POSTS_PER_CHECK,
+                "resultsType": "posts"
+            }
+            
+            # Start the run
+            response = requests.post(actor_url, params=params, json=data, timeout=30)
+            
+            if response.status_code in [200, 201]:
+                result = response.json()
+                run_id = result.get('data', {}).get('id')
+                
+                if run_id:
+                    print(f"  → Waiting for Apify to scrape...")
+                    
+                    # Wait for the run to complete (max 60 seconds)
+                    import time
+                    for _ in range(12):  # 12 * 5 = 60 seconds
+                        time.sleep(5)
+                        
+                        # Check run status
+                        status_url = f"https://api.apify.com/v2/acts/apify~instagram-profile-scraper/runs/{run_id}"
+                        status_response = requests.get(status_url, params=params, timeout=10)
+                        
+                        if status_response.status_code == 200:
+                            status_data = status_response.json()
+                            status = status_data.get('data', {}).get('status')
+                            
+                            if status == 'SUCCEEDED':
+                                # Get the results
+                                dataset_id = status_data.get('data', {}).get('defaultDatasetId')
+                                
+                                if dataset_id:
+                                    dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items"
+                                    dataset_response = requests.get(dataset_url, params=params, timeout=30)
+                                    
+                                    if dataset_response.status_code == 200:
+                                        items = dataset_response.json()
+                                        
+                                        posts = []
+                                        for item in items:
+                                            latest_posts = item.get('latestPosts', [])
+                                            for post in latest_posts[:MAX_POSTS_PER_CHECK]:
+                                                shortcode = post.get('shortCode')
+                                                if shortcode:
+                                                    posts.append({
+                                                        'code': shortcode,
+                                                        'likes': post.get('likesCount', 0),
+                                                        'caption': post.get('caption', '')
+                                                    })
+                                        
+                                        if posts:
+                                            print(f"  ✓ Got {len(posts)} posts via Apify")
+                                            return posts
+                                
+                                break
+                            elif status in ['FAILED', 'ABORTED', 'TIMED-OUT']:
+                                print(f"  ⚠ Apify run {status}")
+                                break
+            
             return []
         except Exception as e:
             print(f"  ⚠ Apify error: {str(e)[:100]}")
