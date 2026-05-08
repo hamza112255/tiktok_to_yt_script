@@ -172,11 +172,36 @@ def _run(cmd: list, timeout: Optional[int] = None) -> subprocess.CompletedProces
             return subprocess.CompletedProcess(cmd, returncode=1, stdout="", stderr=str(e))
 
 
-def _check_ffmpeg() -> bool:
-    res = _run(["ffmpeg", "-version"], timeout=10)
-    ok  = res.returncode == 0
-    print(f"{'✓' if ok else '⚠'} ffmpeg: {'available' if ok else 'NOT FOUND — image conversion and watermarking disabled'}")
-    return ok
+def _resolve_ffmpeg() -> str:
+    """
+    Return a path to a working ffmpeg binary.
+    Priority:
+      1. System ffmpeg in PATH
+      2. imageio-ffmpeg pip package (ships its own pre-built binary — works on
+         Railway/Docker without any apt/nix package installation needed)
+    Returns empty string when nothing is found.
+    """
+    for candidate in ("ffmpeg", "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"):
+        try:
+            r = subprocess.run(
+                [candidate, "-version"], capture_output=True, timeout=8
+            )
+            if r.returncode == 0:
+                return candidate
+        except Exception:
+            pass
+
+    try:
+        import imageio_ffmpeg  # noqa: PLC0415
+        path = imageio_ffmpeg.get_ffmpeg_exe()
+        r    = subprocess.run([path, "-version"], capture_output=True, timeout=8)
+        if r.returncode == 0:
+            print(f"✓ ffmpeg: using imageio-ffmpeg bundled binary")
+            return path
+    except Exception:
+        pass
+
+    return ""
 
 
 def _hash(s: str) -> str:
@@ -191,7 +216,12 @@ def _rm(path) -> None:
         pass
 
 
-FFMPEG_AVAILABLE = _check_ffmpeg()
+FFMPEG_PATH      = _resolve_ffmpeg()
+FFMPEG_AVAILABLE = bool(FFMPEG_PATH)
+print(
+    f"{'✓' if FFMPEG_AVAILABLE else '⚠'} ffmpeg: "
+    + ("available" if FFMPEG_AVAILABLE else "NOT FOUND — watermark + image conversion disabled")
+)
 
 
 def _setup_instagram_cookies() -> None:
@@ -373,7 +403,7 @@ class CopyrightChecker:
         try:
             _run(
                 [
-                    "ffmpeg", "-i", str(video_path),
+                    FFMPEG_PATH, "-i", str(video_path),
                     "-t", "10", "-vn", "-ar", "44100",
                     "-ac", "1", "-b:a", "64k", "-y", str(snippet),
                 ],
@@ -502,9 +532,11 @@ class VideoProcessor:
             audio = random.choice(self._audio_tracks)
             out   = img.parent / f"{img.stem}_v.mp4"
 
+            # ffprobe lives alongside ffmpeg in the same directory
+            ffprobe = FFMPEG_PATH.replace("ffmpeg", "ffprobe") if FFMPEG_PATH else "ffprobe"
             res = _run(
                 [
-                    "ffprobe", "-v", "error",
+                    ffprobe, "-v", "error",
                     "-show_entries", "format=duration",
                     "-of", "json", str(audio),
                 ],
@@ -517,7 +549,7 @@ class VideoProcessor:
                 pass
 
             cmd = [
-                "ffmpeg", "-loop", "1", "-i", str(img), "-i", str(audio),
+                FFMPEG_PATH, "-loop", "1", "-i", str(img), "-i", str(audio),
                 "-c:v", "libx264", "-t", str(duration), "-pix_fmt", "yuv420p",
                 "-vf",
                 "scale=1080:1920:force_original_aspect_ratio=decrease,"
@@ -548,7 +580,7 @@ class VideoProcessor:
             f"shadowcolor=black@0.4:shadowx=1:shadowy=1"
         )
         cmd = [
-            "ffmpeg", "-i", str(src),
+            FFMPEG_PATH, "-i", str(src),
             "-vf", wm_filter,
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-c:a", "copy", "-y", str(dst),
@@ -597,6 +629,8 @@ class Downloader:
             "--merge-output-format", "mp4",
             "--ignore-errors",      # skip individual bad files without aborting the playlist
         ]
+        if FFMPEG_PATH:
+            cmd += ["--ffmpeg-location", FFMPEG_PATH]
         if self._cookies.exists():
             cmd += ["--cookies", str(self._cookies)]
         if extra_args:

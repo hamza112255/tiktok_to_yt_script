@@ -10,6 +10,7 @@ instaloader
 feedparser
 requests
 instagrapi
+imageio-ffmpeg
 
 # Optional: AI-based female detection (heavy — not used on Railway)
 # deepface
