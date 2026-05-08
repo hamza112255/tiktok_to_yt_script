@@ -110,6 +110,10 @@ MAX_VIDEOS_PER_ACCOUNT = int(os.getenv("MAX_VIDEOS_PER_ACCOUNT", "3"))
 MAX_FILE_SIZE          = os.getenv("MAX_FILE_SIZE", "100M")
 AUDD_API_KEY           = os.getenv("AUDD_API_KEY", "")
 
+# YouTube Data API v3 quota: 10,000 units/day; each upload costs 1,600 units → ~6 max.
+# Keep at 5 by default to leave headroom for other API calls.
+MAX_UPLOADS_PER_DAY = int(os.getenv("MAX_UPLOADS_PER_DAY", "5"))
+
 # Instagram credentials — get sessionid from browser cookies after logging in
 INSTAGRAM_SESSION_ID = os.getenv("INSTAGRAM_SESSION_ID", "")
 INSTAGRAM_USERNAME   = os.getenv("INSTAGRAM_USERNAME", "")
@@ -288,24 +292,63 @@ def _font_filter_prefix() -> str:
 
 class YouTubeUploader:
     SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+    _QUOTA_FILE = BASE_DIR / "yt_quota.json"
 
     def __init__(self):
-        self.yt = None
-        self.enabled = False
+        self.yt             = None
+        self.enabled        = False
+        self.quota_exceeded = False
+        self._today_count   = self._load_quota_count()
+        if self._today_count >= MAX_UPLOADS_PER_DAY:
+            self.quota_exceeded = True
+            print(f"⚠ YouTube daily limit already reached ({self._today_count}/{MAX_UPLOADS_PER_DAY}) — uploads paused until tomorrow")
         if YOUTUBE_AVAILABLE:
             self._auth()
+
+    # ── Quota tracking ────────────────────────────────────────────────────
+
+    def _load_quota_count(self) -> int:
+        today = datetime.now().strftime("%Y-%m-%d")
+        try:
+            data = json.loads(self._QUOTA_FILE.read_text(encoding="utf-8"))
+            if data.get("date") == today:
+                return int(data.get("count", 0))
+        except Exception:
+            pass
+        return 0
+
+    def _save_quota_count(self) -> None:
+        self._QUOTA_FILE.write_text(
+            json.dumps({"date": datetime.now().strftime("%Y-%m-%d"), "count": self._today_count}),
+            encoding="utf-8",
+        )
+
+    def _refresh_quota_if_new_day(self) -> None:
+        today = datetime.now().strftime("%Y-%m-%d")
+        try:
+            data = json.loads(self._QUOTA_FILE.read_text(encoding="utf-8"))
+            if data.get("date") != today:
+                self._today_count   = 0
+                self.quota_exceeded = False
+                self._save_quota_count()
+                print(f"  ✓ New day — YouTube upload quota reset (0/{MAX_UPLOADS_PER_DAY})")
+        except Exception:
+            pass
+
+    def quota_status(self) -> str:
+        return f"{self._today_count}/{MAX_UPLOADS_PER_DAY} uploads today"
+
+    # ── Auth ──────────────────────────────────────────────────────────────
 
     def _auth(self):
         try:
             token_file  = BASE_DIR / "token.json"
             secret_file = BASE_DIR / "client_secret.json"
 
-            # Accept token JSON blob from env var (headless / Railway)
             token_env = os.getenv("YOUTUBE_TOKEN_JSON")
             if token_env and not token_file.exists():
                 token_file.write_text(token_env, encoding="utf-8")
 
-            # Accept base64-encoded client secret from env var
             if not secret_file.exists():
                 secret_b64 = os.getenv("YOUTUBE_CLIENT_SECRET_B64")
                 if secret_b64:
@@ -316,9 +359,7 @@ class YouTubeUploader:
 
             creds = None
             if token_file.exists():
-                creds = Credentials.from_authorized_user_file(
-                    str(token_file), self.SCOPES
-                )
+                creds = Credentials.from_authorized_user_file(str(token_file), self.SCOPES)
 
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
@@ -328,21 +369,30 @@ class YouTubeUploader:
                     print("⚠ YouTube token invalid on Railway — upload disabled")
                     return
                 else:
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        str(secret_file), self.SCOPES
-                    )
+                    flow = InstalledAppFlow.from_client_secrets_file(str(secret_file), self.SCOPES)
                     creds = flow.run_local_server(port=0)
                     token_file.write_text(creds.to_json(), encoding="utf-8")
 
             self.yt = build("youtube", "v3", credentials=creds)
             self.enabled = True
-            print("✓ YouTube authenticated")
+            print(f"✓ YouTube authenticated ({self.quota_status()})")
         except Exception as e:
             print(f"✗ YouTube auth failed: {e}")
+
+    # ── Upload ────────────────────────────────────────────────────────────
 
     def upload(self, video_path: Path, title: str, description: str) -> bool:
         if not self.enabled:
             return False
+
+        # Reset counter if it's a new calendar day
+        self._refresh_quota_if_new_day()
+
+        if self.quota_exceeded or self._today_count >= MAX_UPLOADS_PER_DAY:
+            print(f"  ⏸ Daily limit ({MAX_UPLOADS_PER_DAY} uploads) reached — skipping until tomorrow")
+            self.quota_exceeded = True
+            return False
+
         try:
             print(f"  ↑ Uploading: {video_path.name}")
             clean_title = title.strip()[:90]
@@ -362,19 +412,26 @@ class YouTubeUploader:
                 },
             }
             media   = MediaFileUpload(str(video_path), chunksize=-1, resumable=True)
-            request = self.yt.videos().insert(
-                part="snippet,status", body=body, media_body=media
-            )
+            request = self.yt.videos().insert(part="snippet,status", body=body, media_body=media)
+
             response = None
             while response is None:
                 status, response = request.next_chunk()
                 if status:
                     print(f"    {int(status.progress() * 100)}%")
 
+            self._today_count += 1
+            self._save_quota_count()
             vid_id = response["id"]
-            print(f"  ✓ Uploaded → https://youtube.com/watch?v={vid_id}")
+            print(f"  ✓ Uploaded [{self._today_count}/{MAX_UPLOADS_PER_DAY} today] → https://youtube.com/watch?v={vid_id}")
             return True
+
         except Exception as e:
+            err = str(e)
+            if "quotaExceeded" in err:
+                print(f"  ⚠ YouTube API quota exhausted — uploads paused until midnight (Pacific)")
+                self.quota_exceeded = True
+                return False
             print(f"  ✗ Upload failed: {e}")
             return False
 
@@ -532,21 +589,23 @@ class VideoProcessor:
             audio = random.choice(self._audio_tracks)
             out   = img.parent / f"{img.stem}_v.mp4"
 
-            # ffprobe lives alongside ffmpeg in the same directory
-            ffprobe = FFMPEG_PATH.replace("ffmpeg", "ffprobe") if FFMPEG_PATH else "ffprobe"
-            res = _run(
-                [
-                    ffprobe, "-v", "error",
-                    "-show_entries", "format=duration",
-                    "-of", "json", str(audio),
-                ],
-                timeout=15,
-            )
+            # Use system ffprobe if available; imageio-ffmpeg does NOT ship ffprobe.
             duration = 15.0
-            try:
-                duration = min(60.0, float(json.loads(res.stdout)["format"]["duration"]))
-            except Exception:
-                pass
+            for ffprobe_candidate in ("ffprobe", "/usr/bin/ffprobe", "/usr/local/bin/ffprobe"):
+                res = _run(
+                    [
+                        ffprobe_candidate, "-v", "error",
+                        "-show_entries", "format=duration",
+                        "-of", "json", str(audio),
+                    ],
+                    timeout=15,
+                )
+                if res.returncode == 0:
+                    try:
+                        duration = min(60.0, float(json.loads(res.stdout)["format"]["duration"]))
+                    except Exception:
+                        pass
+                    break
 
             cmd = [
                 FFMPEG_PATH, "-loop", "1", "-i", str(img), "-i", str(audio),
@@ -557,11 +616,14 @@ class VideoProcessor:
                 "-c:a", "aac", "-b:a", "128k", "-shortest", "-y", str(out),
             ]
             res = _run(cmd, timeout=120)
-            if res.returncode == 0 and out.exists():
+            if res.returncode == 0 and out.exists() and out.stat().st_size > 1024:
                 _rm(img)
                 print(f"  ✓ Image → video: {out.name}")
                 return out
-            print(f"  ⚠ image_to_video failed: {res.stderr[-200:] if res.stderr else ''}")
+            # Show first 800 chars of stderr — ffmpeg errors appear at the start,
+            # progress lines appear at the end (those are useless for diagnosis).
+            err_snippet = (res.stderr or "")[:800].strip()
+            print(f"  ⚠ image_to_video failed (rc={res.returncode}): {err_snippet}")
         except Exception as e:
             print(f"  ⚠ image_to_video: {e}")
         return None
@@ -571,25 +633,44 @@ class VideoProcessor:
         if not FFMPEG_AVAILABLE:
             return src   # upload as-is when ffmpeg is missing
         dst = src.parent / f"{src.stem}_wm.mp4"
-        wm_filter = (
-            f"drawtext={self._font_prefix}"
-            f"text='{WATERMARK_TEXT}':"
-            f"fontsize={WATERMARK_SIZE}:"
-            f"fontcolor=white@0.55:"
-            f"x=(w-text_w)/2:y=(h-text_h)/2:"
-            f"shadowcolor=black@0.4:shadowx=1:shadowy=1"
-        )
-        cmd = [
-            FFMPEG_PATH, "-i", str(src),
-            "-vf", wm_filter,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-c:a", "copy", "-y", str(dst),
-        ]
-        res = _run(cmd, timeout=300)
-        if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
+
+        def _try_watermark(font_prefix: str) -> bool:
+            wm_filter = (
+                f"drawtext={font_prefix}"
+                f"text='{WATERMARK_TEXT}':"
+                f"fontsize={WATERMARK_SIZE}:"
+                f"fontcolor=white@0.55:"
+                f"x=(w-text_w)/2:y=(h-text_h)/2:"
+                f"shadowcolor=black@0.4:shadowx=1:shadowy=1"
+            )
+            cmd = [
+                FFMPEG_PATH, "-i", str(src),
+                "-vf", wm_filter,
+                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-c:a", "copy", "-y", str(dst),
+            ]
+            res = _run(cmd, timeout=300)
+            if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
+                return True
+            err_snippet = (res.stderr or "")[:800].strip()
+            print(f"  ⚠ Watermark attempt failed (rc={res.returncode}): {err_snippet}")
+            if dst.exists():
+                dst.unlink(missing_ok=True)
+            return False
+
+        # First attempt: use the system font file (if found).
+        if _try_watermark(self._font_prefix):
             _rm(src)
-            print(f"  ✓ Watermark added")
+            print("  ✓ Watermark added")
             return dst
+
+        # Second attempt: no fontfile= — let ffmpeg use its built-in font.
+        # imageio-ffmpeg static builds have drawtext but may not have the font path.
+        if self._font_prefix and _try_watermark(""):
+            _rm(src)
+            print("  ✓ Watermark added (built-in font)")
+            return dst
+
         print("  ⚠ Watermark failed — uploading original")
         return src
 
