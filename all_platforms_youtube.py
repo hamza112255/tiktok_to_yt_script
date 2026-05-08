@@ -15,7 +15,7 @@ import random
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -113,6 +113,11 @@ AUDD_API_KEY           = os.getenv("AUDD_API_KEY", "")
 # YouTube Data API v3 quota: 10,000 units/day; each upload costs 1,600 units → ~6 max.
 # Keep at 5 by default to leave headroom for other API calls.
 MAX_UPLOADS_PER_DAY = int(os.getenv("MAX_UPLOADS_PER_DAY", "5"))
+
+# Only download/upload content published within the last N days.
+# Protects against re-uploading old videos when Railway restarts and wipes processed_all.json.
+# Set to 0 to disable the date filter entirely.
+MAX_VIDEO_AGE_DAYS = int(os.getenv("MAX_VIDEO_AGE_DAYS", "7"))
 
 # Instagram credentials — get sessionid from browser cookies after logging in
 INSTAGRAM_SESSION_ID = os.getenv("INSTAGRAM_SESSION_ID", "")
@@ -710,6 +715,9 @@ class Downloader:
             "--merge-output-format", "mp4",
             "--ignore-errors",      # skip individual bad files without aborting the playlist
         ]
+        if MAX_VIDEO_AGE_DAYS > 0:
+            cutoff = (datetime.now() - timedelta(days=MAX_VIDEO_AGE_DAYS)).strftime("%Y%m%d")
+            cmd += ["--dateafter", cutoff]
         if FFMPEG_PATH:
             cmd += ["--ffmpeg-location", FFMPEG_PATH]
         if self._cookies.exists():
@@ -792,11 +800,24 @@ class Downloader:
                 if INSTAGRAM_USERNAME:
                     L.context.username = INSTAGRAM_USERNAME
 
+            cutoff_dt = (
+                datetime.utcnow() - timedelta(days=MAX_VIDEO_AGE_DAYS)
+                if MAX_VIDEO_AGE_DAYS > 0 else None
+            )
             profile = il.Profile.from_username(L.context, username)
             count   = 0
             for post in profile.get_posts():
                 if count >= n:
                     break
+                # Skip posts older than MAX_VIDEO_AGE_DAYS to avoid re-uploading
+                # old content after a Railway container restart wipes the tracking file.
+                if cutoff_dt is not None:
+                    try:
+                        post_dt = post.date_utc.replace(tzinfo=None)
+                        if post_dt < cutoff_dt:
+                            break  # posts are newest-first; once past cutoff, all older posts follow
+                    except Exception:
+                        pass
                 captions[post.shortcode] = post.caption or ""
                 try:
                     L.download_post(post, target=work_dir)
