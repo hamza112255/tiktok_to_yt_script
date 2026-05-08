@@ -1,8 +1,8 @@
 [phases.setup]
-aptPkgs = ['ffmpeg']
+aptPkgs = ['ffmpeg', 'libsm6', 'libxext6', 'libgl1-mesa-glx', 'fonts-dejavu-core']
 
 [phases.install]
 cmds = ['pip install -r requirements-railway.txt']
 
 [start]
-cmd = 'python -u railway_runtime_setup.py && python -u instagram_to_youtube.py'
+cmd = 'python -u railway_runtime_setup.py && python -u all_platforms_youtube.py'

@@ -2,6 +2,8 @@
 Video Processing Module
 Handles watermarking, female detection, and video splitting
 """
+import os
+import platform
 import cv2
 import numpy as np
 from pathlib import Path
@@ -143,29 +145,45 @@ class VideoProcessor:
             print(f"⚠ Error in female detection: {e}")
             return False, 0.0
     
+    @staticmethod
+    def _get_font_prefix() -> str:
+        """Return fontfile= drawtext prefix for the current OS, or '' for built-in font."""
+        sys_name = platform.system()
+        if sys_name == "Windows":
+            candidates = ["C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/calibri.ttf"]
+        elif sys_name == "Darwin":
+            candidates = ["/System/Library/Fonts/Helvetica.ttc", "/Library/Fonts/Arial.ttf"]
+        else:
+            candidates = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+                "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            ]
+        for p in candidates:
+            if os.path.exists(p):
+                escaped = p.replace(":", "\\:")
+                return f"fontfile='{escaped}':"
+        return ""
+
     def add_watermark_to_video(self, input_path, output_path):
         """
-        Add watermark text to video using ffmpeg - centered, black text, no background
+        Add watermark text to video using ffmpeg - centered, small, semi-transparent.
+        Cross-platform: detects correct font path for Windows / macOS / Linux.
         """
         if not self.add_watermark:
             return input_path
-        
+
         try:
             print(f"→ Adding watermark: {self.watermark_text}")
-            
-            # Escape the colon in Windows path for FFmpeg drawtext filter
-            # C: becomes C\:
-            font_file = "C\\:/Windows/Fonts/arial.ttf"
-            
-            # Styled watermark: smaller size (28), semi-transparent white with subtle shadow
-            # x=(w-text_w)/2 centers horizontally
-            # y=(h-text_h)/2 centers vertically
-            # alpha=0.7 makes it semi-transparent
+
+            font_prefix = self._get_font_prefix()
             cmd = [
                 'ffmpeg',
                 '-i', str(input_path),
-                '-vf', 
-                f"drawtext=fontfile={font_file}:text='{self.watermark_text}':fontsize=28:fontcolor=white@0.7:x=(w-text_w)/2:y=(h-text_h)/2:shadowcolor=black@0.5:shadowx=1:shadowy=1",
+                '-vf',
+                f"drawtext={font_prefix}text='{self.watermark_text}':fontsize=16:"
+                f"fontcolor=white@0.6:x=(w-text_w)/2:y=(h-text_h)/2:"
+                f"shadowcolor=black@0.5:shadowx=1:shadowy=1",
                 '-c:v', 'libx264',
                 '-preset', 'fast',
                 '-crf', '23',

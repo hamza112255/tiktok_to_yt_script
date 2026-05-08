@@ -42,6 +42,19 @@ youtube_ready/
 # Video tracking
 downloaded_videos.json
 video_urls.txt
+processed_all.json
+processed.json
+
+# Temp download directories
+temp_all/
+temp_downloads/
+
+# Instagram cookies (sensitive)
+instagram_cookies.txt
+*.cookies.txt
+
+# Environment
+.env
 
 # Model files
 *.pt

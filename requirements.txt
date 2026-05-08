@@ -10,3 +10,7 @@ instaloader
 feedparser
 requests
 instagrapi
+
+# Optional: AI-based female detection (heavy — not used on Railway)
+# deepface
+# tf-keras
