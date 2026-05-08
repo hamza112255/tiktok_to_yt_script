@@ -114,10 +114,12 @@ AUDD_API_KEY           = os.getenv("AUDD_API_KEY", "")
 # Keep at 5 by default to leave headroom for other API calls.
 MAX_UPLOADS_PER_DAY = int(os.getenv("MAX_UPLOADS_PER_DAY", "5"))
 
-# Only download/upload content published within the last N days.
-# Protects against re-uploading old videos when Railway restarts and wipes processed_all.json.
-# Set to 0 to disable the date filter entirely.
-MAX_VIDEO_AGE_DAYS = int(os.getenv("MAX_VIDEO_AGE_DAYS", "7"))
+# Only download/upload content published within the last N hours.
+# Using hours (not days) so the bot only ever touches truly recent content —
+# even after a Railway restart the tracking file is gone, but hour-precision
+# means we only look back MAX_VIDEO_AGE_HOURS from *now*, so old videos stay ignored.
+# Default: 24 hours. Set to 0 to disable.
+MAX_VIDEO_AGE_HOURS = int(os.getenv("MAX_VIDEO_AGE_HOURS", "24"))
 
 # Instagram credentials — get sessionid from browser cookies after logging in
 INSTAGRAM_SESSION_ID = os.getenv("INSTAGRAM_SESSION_ID", "")
@@ -715,9 +717,12 @@ class Downloader:
             "--merge-output-format", "mp4",
             "--ignore-errors",      # skip individual bad files without aborting the playlist
         ]
-        if MAX_VIDEO_AGE_DAYS > 0:
-            cutoff = (datetime.now() - timedelta(days=MAX_VIDEO_AGE_DAYS)).strftime("%Y%m%d")
-            cmd += ["--dateafter", cutoff]
+        if MAX_VIDEO_AGE_HOURS > 0:
+            # yt-dlp --dateafter is day-precision only (YYYYMMDD).
+            # We floor to the start of the cutoff day so we never miss a video
+            # posted earlier today; the instaloader path uses hour-precision instead.
+            cutoff_dt = datetime.now() - timedelta(hours=MAX_VIDEO_AGE_HOURS)
+            cmd += ["--dateafter", cutoff_dt.strftime("%Y%m%d")]
         if FFMPEG_PATH:
             cmd += ["--ffmpeg-location", FFMPEG_PATH]
         if self._cookies.exists():
@@ -801,21 +806,21 @@ class Downloader:
                     L.context.username = INSTAGRAM_USERNAME
 
             cutoff_dt = (
-                datetime.utcnow() - timedelta(days=MAX_VIDEO_AGE_DAYS)
-                if MAX_VIDEO_AGE_DAYS > 0 else None
+                datetime.utcnow() - timedelta(hours=MAX_VIDEO_AGE_HOURS)
+                if MAX_VIDEO_AGE_HOURS > 0 else None
             )
             profile = il.Profile.from_username(L.context, username)
             count   = 0
             for post in profile.get_posts():
                 if count >= n:
                     break
-                # Skip posts older than MAX_VIDEO_AGE_DAYS to avoid re-uploading
-                # old content after a Railway container restart wipes the tracking file.
+                # instaloader gives hour-precision dates — stop as soon as we
+                # hit a post older than MAX_VIDEO_AGE_HOURS (posts come newest-first).
                 if cutoff_dt is not None:
                     try:
                         post_dt = post.date_utc.replace(tzinfo=None)
                         if post_dt < cutoff_dt:
-                            break  # posts are newest-first; once past cutoff, all older posts follow
+                            break
                     except Exception:
                         pass
                 captions[post.shortcode] = post.caption or ""
