@@ -558,7 +558,7 @@ class Downloader:
             "-o", tmpl,
             "--playlist-end", str(n),
             "--max-filesize", MAX_FILE_SIZE,
-            "--no-warnings", "--quiet",
+            "--no-warnings",
             "--write-info-json",
             "--merge-output-format", "mp4",
         ]
@@ -566,7 +566,12 @@ class Downloader:
             cmd += ["--cookies", str(self._cookies)]
         cmd.append(url)
 
-        _run(cmd, timeout=300)  # errors handled by checking output files
+        res = _run(cmd, timeout=300)
+        if res.returncode != 0:
+            # Surface the last meaningful error line so we know why it failed
+            err_lines = [l for l in (res.stderr or "").splitlines() if l.strip()]
+            if err_lines:
+                print(f"    yt-dlp warn: {err_lines[-1][:140]}")
 
         results = []
         for media in sorted(TEMP_DIR.glob(f"{ts}_{safe}_*")):
@@ -587,6 +592,74 @@ class Downloader:
                 _rm(jfile)
 
             results.append((media, info))
+
+        return results
+
+    def fetch_instaloader(
+        self, username: str, n: int = MAX_VIDEOS_PER_ACCOUNT
+    ) -> list:
+        """
+        Download latest Instagram posts/reels via instaloader.
+        Works for public profiles without any login credentials.
+        Falls back silently when instaloader is not installed.
+        """
+        try:
+            import instaloader as il
+        except ImportError:
+            print("  ⚠ instaloader not installed — pip install instaloader")
+            return []
+
+        ts       = datetime.now().strftime("%Y%m%d_%H%M%S%f")
+        work_dir = TEMP_DIR / f"il_{username[:12]}_{ts[-8:]}"
+        work_dir.mkdir(exist_ok=True)
+        captions: dict = {}
+
+        try:
+            L = il.Instaloader(
+                dirname_pattern=str(work_dir),
+                filename_pattern=f"{ts}_{{shortcode}}",
+                download_videos=True,
+                download_video_thumbnails=False,
+                download_geotags=False,
+                download_comments=False,
+                save_metadata=False,
+                post_metadata_txt_pattern="",
+                compress_json=False,
+                max_connection_attempts=2,
+                quiet=True,
+            )
+            profile = il.Profile.from_username(L.context, username)
+            count   = 0
+            for post in profile.get_posts():
+                if count >= n:
+                    break
+                captions[post.shortcode] = post.caption or ""
+                try:
+                    L.download_post(post, target=work_dir)
+                except Exception as e:
+                    print(f"    ⚠ {e}")
+                count += 1
+        except Exception as e:
+            print(f"  ⚠ instaloader @{username}: {e}")
+
+        results = []
+        for f in sorted(work_dir.rglob("*")):
+            if f.is_dir():
+                continue
+            if f.suffix.lower() in {".txt", ".json", ".xz"}:
+                _rm(f)
+                continue
+            if f.suffix.lower() not in VIDEO_EXTS | IMAGE_EXTS:
+                _rm(f)
+                continue
+            # filename_pattern = "{ts}_{shortcode}.ext"
+            sc      = f.stem.rsplit("_", 1)[-1] if "_" in f.stem else f.stem
+            caption = captions.get(sc, "")
+            results.append((f, {
+                "id":          f.stem,
+                "description": caption,
+                "title":       caption[:100] if caption else "",
+            }))
 
         return results
 
@@ -700,21 +773,13 @@ class AllPlatformsBot:
     def _run_instagram(self) -> None:
         print("\n── Instagram ─────────────────────────────")
         for user in INSTAGRAM_ACCOUNTS:
-            # Posts
-            print(f"  @{user} [posts]")
-            for media, info in self.dl.fetch(
-                f"https://www.instagram.com/{user}/", f"igp_{user[:12]}"
-            ):
+            # Posts + Reels: instaloader works for public profiles without login.
+            # yt-dlp requires cookies for Instagram profile browsing.
+            print(f"  @{user} [posts/reels]")
+            for media, info in self.dl.fetch_instaloader(user):
                 self._handle(media, info, "instagram", user)
 
-            # Reels
-            print(f"  @{user} [reels]")
-            for media, info in self.dl.fetch(
-                f"https://www.instagram.com/{user}/reels/", f"igr_{user[:12]}"
-            ):
-                self._handle(media, info, "instagram", user)
-
-            # Stories (requires instagram_cookies.txt — silently skipped otherwise)
+            # Stories: yt-dlp with instagram_cookies.txt (skip silently without them)
             print(f"  @{user} [stories]")
             for media, info in self.dl.fetch(
                 f"https://www.instagram.com/stories/{user}/",
@@ -725,18 +790,13 @@ class AllPlatformsBot:
 
     def _run_snapchat(self) -> None:
         print("\n── Snapchat ──────────────────────────────")
-        for user in SNAPCHAT_ACCOUNTS:
-            print(f"  @{user} [profile]")
-            for media, info in self.dl.fetch(
-                f"https://www.snapchat.com/@{user}", f"sc_{user[:12]}"
-            ):
-                self._handle(media, info, "snapchat", user)
-
+        # yt-dlp does NOT support generic Snapchat profile pages.
+        # Only specific story/spotlight URLs (with the hash fragment) are supported.
         for story_url in SNAPCHAT_STORY_URLS:
             user = story_url.split("@")[1].split("/")[0]
             h    = _hash(story_url)
-            print(f"  @{user} [story/{h}]")
-            for media, info in self.dl.fetch(story_url, f"scs_{h}"):
+            print(f"  @{user} [story]")
+            for media, info in self.dl.fetch(story_url, f"sc_{h}"):
                 self._handle(media, info, "snapchat", user)
 
     def _run_tiktok(self) -> None:
