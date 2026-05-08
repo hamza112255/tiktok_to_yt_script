@@ -110,6 +110,10 @@ MAX_VIDEOS_PER_ACCOUNT = int(os.getenv("MAX_VIDEOS_PER_ACCOUNT", "3"))
 MAX_FILE_SIZE          = os.getenv("MAX_FILE_SIZE", "100M")
 AUDD_API_KEY           = os.getenv("AUDD_API_KEY", "")
 
+# Instagram credentials — get sessionid from browser cookies after logging in
+INSTAGRAM_SESSION_ID = os.getenv("INSTAGRAM_SESSION_ID", "")
+INSTAGRAM_USERNAME   = os.getenv("INSTAGRAM_USERNAME", "")
+
 # Female detection defaults to OFF on Railway (no GPU / heavy deps)
 ENABLE_FEMALE_DETECTION = (
     os.getenv("ENABLE_FEMALE_DETECTION", "false" if IS_RAILWAY else "true").lower()
@@ -188,6 +192,31 @@ def _rm(path) -> None:
 
 
 FFMPEG_AVAILABLE = _check_ffmpeg()
+
+
+def _setup_instagram_cookies() -> None:
+    """
+    Write instagram_cookies.txt from INSTAGRAM_SESSION_ID env var.
+    Called once at startup so both yt-dlp and instaloader can use it.
+    Instagram blocks datacenter IPs unless an authenticated session is provided.
+    Get your sessionid: log into Instagram in Chrome → F12 → Application →
+    Cookies → instagram.com → copy the 'sessionid' value.
+    """
+    cookies_file = BASE_DIR / "instagram_cookies.txt"
+    if not INSTAGRAM_SESSION_ID:
+        return
+    if cookies_file.exists():
+        return  # already written (e.g. mounted volume or previous run)
+    content = (
+        "# Netscape HTTP Cookie File\n"
+        "# Generated from INSTAGRAM_SESSION_ID environment variable\n"
+        f".instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t{INSTAGRAM_SESSION_ID}\n"
+    )
+    cookies_file.write_text(content, encoding="utf-8")
+    print("✓ instagram_cookies.txt written from INSTAGRAM_SESSION_ID")
+
+
+_setup_instagram_cookies()
 
 
 def _font_filter_prefix() -> str:
@@ -543,11 +572,16 @@ class Downloader:
         self._cookies = BASE_DIR / "instagram_cookies.txt"
 
     def fetch(
-        self, url: str, prefix: str, n: int = MAX_VIDEOS_PER_ACCOUNT
+        self,
+        url: str,
+        prefix: str,
+        n: int = MAX_VIDEOS_PER_ACCOUNT,
+        extra_args: Optional[list] = None,
     ) -> list:
         """
         Download up to n newest items from `url` using yt-dlp.
         Returns [(Path, info_dict), ...].
+        extra_args are appended to the yt-dlp command before the URL.
         """
         ts   = datetime.now().strftime("%Y%m%d_%H%M%S%f")
         safe = prefix[:18].replace("/", "_").replace(".", "_")
@@ -561,9 +595,12 @@ class Downloader:
             "--no-warnings",
             "--write-info-json",
             "--merge-output-format", "mp4",
+            "--ignore-errors",      # skip individual bad files without aborting the playlist
         ]
         if self._cookies.exists():
             cmd += ["--cookies", str(self._cookies)]
+        if extra_args:
+            cmd += extra_args
         cmd.append(url)
 
         res = _run(cmd, timeout=300)
@@ -628,6 +665,18 @@ class Downloader:
                 max_connection_attempts=2,
                 quiet=True,
             )
+
+            # Authenticate with sessionid cookie when available.
+            # Instagram blocks unauthenticated requests from datacenter IPs (Railway).
+            # Get your sessionid: log into Instagram in Chrome → F12 → Application
+            # → Cookies → instagram.com → copy 'sessionid' → set INSTAGRAM_SESSION_ID.
+            if INSTAGRAM_SESSION_ID:
+                L.context._session.cookies.set(
+                    "sessionid", INSTAGRAM_SESSION_ID, domain=".instagram.com"
+                )
+                if INSTAGRAM_USERNAME:
+                    L.context.username = INSTAGRAM_USERNAME
+
             profile = il.Profile.from_username(L.context, username)
             count   = 0
             for post in profile.get_posts():
@@ -791,12 +840,16 @@ class AllPlatformsBot:
     def _run_snapchat(self) -> None:
         print("\n── Snapchat ──────────────────────────────")
         # yt-dlp does NOT support generic Snapchat profile pages.
-        # Only specific story/spotlight URLs (with the hash fragment) are supported.
+        # Only specific story/spotlight URLs (with the hash fragment) are tried.
+        # --allow-unplayable-formats bypasses yt-dlp's unusual-extension safety check.
+        snap_extra = ["--allow-unplayable-formats"]
         for story_url in SNAPCHAT_STORY_URLS:
             user = story_url.split("@")[1].split("/")[0]
             h    = _hash(story_url)
             print(f"  @{user} [story]")
-            for media, info in self.dl.fetch(story_url, f"sc_{h}"):
+            for media, info in self.dl.fetch(
+                story_url, f"sc_{h}", extra_args=snap_extra
+            ):
                 self._handle(media, info, "snapchat", user)
 
     def _run_tiktok(self) -> None:
@@ -835,6 +888,7 @@ class AllPlatformsBot:
         print(f"  Snapchat accounts  : {len(SNAPCHAT_ACCOUNTS)} + {len(SNAPCHAT_STORY_URLS)} story URLs")
         print(f"  TikTok accounts    : {len(TIKTOK_ACCOUNTS)}")
         print(f"  Interval           : {CHECK_INTERVAL // 60} min")
+        print(f"  Instagram session  : {'SET ✓' if INSTAGRAM_SESSION_ID else 'NOT SET ⚠ (IG blocked from Railway)'}")
         print(f"  Female detection   : {'ON' if ENABLE_FEMALE_DETECTION else 'OFF'}")
         print(f"  Copyright check    : {'ON' if ENABLE_COPYRIGHT_CHECK else 'OFF'}")
         print(f"  AudD fingerprint   : {'ON' if AUDD_API_KEY else 'OFF (keyword-only)'}")

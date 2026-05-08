@@ -1,4 +1,7 @@
 [phases.setup]
+# Use Nix packages (primary — Railway's nixpacks is Nix-based)
+nixPkgs = ['ffmpeg']
+# Also request via apt as belt-and-suspenders fallback
 aptPkgs = ['ffmpeg']
 
 [phases.install]
