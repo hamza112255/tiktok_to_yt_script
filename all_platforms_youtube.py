@@ -156,8 +156,23 @@ def _run(cmd: list, timeout: Optional[int] = None) -> subprocess.CompletedProces
             errors="replace",
             timeout=timeout,
         )
+    except FileNotFoundError:
+        # Binary not installed — return a failed result so callers degrade gracefully
+        return subprocess.CompletedProcess(
+            cmd, returncode=127, stdout="", stderr=f"Command not found: {cmd[0]}"
+        )
     except Exception:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except Exception as e:
+            return subprocess.CompletedProcess(cmd, returncode=1, stdout="", stderr=str(e))
+
+
+def _check_ffmpeg() -> bool:
+    res = _run(["ffmpeg", "-version"], timeout=10)
+    ok  = res.returncode == 0
+    print(f"{'✓' if ok else '⚠'} ffmpeg: {'available' if ok else 'NOT FOUND — image conversion and watermarking disabled'}")
+    return ok
 
 
 def _hash(s: str) -> str:
@@ -170,6 +185,9 @@ def _rm(path) -> None:
             Path(path).unlink(missing_ok=True)
     except Exception:
         pass
+
+
+FFMPEG_AVAILABLE = _check_ffmpeg()
 
 
 def _font_filter_prefix() -> str:
@@ -444,6 +462,10 @@ class VideoProcessor:
 
     def image_to_video(self, img: Path) -> Optional[Path]:
         """Convert a static image to an MP4 with background music."""
+        if not FFMPEG_AVAILABLE:
+            print("  ⚠ ffmpeg not available — skipping image→video conversion")
+            _rm(img)
+            return None
         if not self._audio_tracks:
             print("  ⚠ No audio tracks found — cannot convert image to video")
             return None
@@ -485,6 +507,8 @@ class VideoProcessor:
 
     def add_watermark(self, src: Path) -> Path:
         """Burn a small centred 'Lahori Twins' text into the video."""
+        if not FFMPEG_AVAILABLE:
+            return src   # upload as-is when ffmpeg is missing
         dst = src.parent / f"{src.stem}_wm.mp4"
         wm_filter = (
             f"drawtext={self._font_prefix}"

@@ -1,5 +1,5 @@
 [phases.setup]
-aptPkgs = ['ffmpeg', 'libsm6', 'libxext6', 'libgl1-mesa-glx', 'fonts-dejavu-core']
+aptPkgs = ['ffmpeg']
 
 [phases.install]
 cmds = ['pip install -r requirements-railway.txt']
