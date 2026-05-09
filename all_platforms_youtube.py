@@ -118,11 +118,17 @@ MAX_VIDEO_AGE_HOURS = int(os.getenv("MAX_VIDEO_AGE_HOURS", "24"))
 INSTAGRAM_SESSION_ID = os.getenv("INSTAGRAM_SESSION_ID", "")
 INSTAGRAM_USERNAME   = os.getenv("INSTAGRAM_USERNAME", "")
 
-# Female detection defaults to OFF on Railway (no GPU / heavy deps)
-ENABLE_FEMALE_DETECTION = (
-    os.getenv("ENABLE_FEMALE_DETECTION", "false" if IS_RAILWAY else "true").lower()
-    == "true"
-)
+# Female detection - check environment variable or default based on platform
+# On Railway, it's disabled by default (heavy deps), but can be enabled via env var
+_female_detect_env = os.getenv("ENABLE_FEMALE_DETECTION", "").lower()
+if _female_detect_env in ("true", "1", "yes", "on"):
+    ENABLE_FEMALE_DETECTION = True
+elif _female_detect_env in ("false", "0", "no", "off"):
+    ENABLE_FEMALE_DETECTION = False
+else:
+    # Default: OFF on Railway, ON locally
+    ENABLE_FEMALE_DETECTION = not IS_RAILWAY
+
 ENABLE_COPYRIGHT_CHECK = os.getenv("ENABLE_COPYRIGHT_CHECK", "true").lower() == "true"
 
 COPYRIGHT_KEYWORDS = [
