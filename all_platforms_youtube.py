@@ -706,9 +706,12 @@ class VideoProcessor:
         dst = src.parent / f"{src.stem}_wm.mp4"
 
         def _try_watermark(font_prefix: str) -> bool:
+            # Escape special characters in watermark text
+            safe_text = WATERMARK_TEXT.replace("'", "'\\\\\\''")
+            
             wm_filter = (
                 f"drawtext={font_prefix}"
-                f"text='{WATERMARK_TEXT}':"
+                f"text='{safe_text}':"
                 f"fontsize={WATERMARK_SIZE}:"
                 f"fontcolor=white@0.55:"
                 f"x=(w-text_w)/2:y=(h-text_h)/2:"
@@ -717,29 +720,32 @@ class VideoProcessor:
             cmd = [
                 FFMPEG_PATH, "-i", str(src),
                 "-vf", wm_filter,
-                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
                 "-c:a", "copy", "-y", str(dst),
             ]
             res = _run(cmd, timeout=300)
             if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
                 return True
-            err_snippet = (res.stderr or "")[:800].strip()
-            print(f"  ⚠ Watermark attempt failed (rc={res.returncode}): {err_snippet}")
+            # Only show error on first attempt
+            if font_prefix:
+                err_snippet = (res.stderr or "")[:400].strip()
+                if err_snippet:
+                    print(f"  ⚠ Watermark attempt failed (rc={res.returncode})")
             if dst.exists():
                 dst.unlink(missing_ok=True)
             return False
 
-        # First attempt: use the system font file (if found).
-        if _try_watermark(self._font_prefix):
+        # First attempt: no fontfile= — let ffmpeg use its built-in font.
+        # This works better with static ffmpeg builds
+        if _try_watermark(""):
             _rm(src)
             print("  ✓ Watermark added")
             return dst
 
-        # Second attempt: no fontfile= — let ffmpeg use its built-in font.
-        # imageio-ffmpeg static builds have drawtext but may not have the font path.
-        if self._font_prefix and _try_watermark(""):
+        # Second attempt: use the system font file (if found).
+        if self._font_prefix and _try_watermark(self._font_prefix):
             _rm(src)
-            print("  ✓ Watermark added (built-in font)")
+            print("  ✓ Watermark added (system font)")
             return dst
 
         print("  ⚠ Watermark failed — uploading original")

@@ -12,6 +12,6 @@ requests
 instagrapi
 imageio-ffmpeg
 
-# Optional: AI-based female detection (heavy — not used on Railway)
-# deepface
-# tf-keras
+# AI-based female detection
+deepface
+tf-keras
