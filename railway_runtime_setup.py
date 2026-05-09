@@ -123,14 +123,48 @@ def _set_if_provided(mapping, key, value):
 
 def setup_runtime_config():
     """Decode credentials and build effective config.json."""
-    # Support both old and new variable names
-    _decode_file_from_env('YOUTUBE_CLIENT_SECRET_B64', 'client_secret.json')
-    if not Path('client_secret.json').exists():
-        _decode_file_from_env('CLIENT_SECRET_B64', 'client_secret.json')
+    # First, try to decode rotation credentials (Project 1, 2, 3)
+    rotation_decoded = False
+    for i in range(1, 10):  # Check up to 9 projects
+        secret_env = f'YOUTUBE_CLIENT_SECRET_{i}_B64'
+        token_env = f'YOUTUBE_TOKEN_{i}_JSON'
+        
+        if os.getenv(secret_env) or os.getenv(token_env):
+            _decode_file_from_env(secret_env, f'client_secret_{i}.json')
+            
+            # Token is already JSON text (not base64), just write it directly
+            token_payload = os.getenv(token_env)
+            if token_payload:
+                try:
+                    # Decode from base64 first
+                    decoded = base64.b64decode(token_payload).decode('utf-8')
+                    Path(f'token_{i}.json').write_text(decoded, encoding='utf-8')
+                    print(f"✓ token_{i}.json created from environment variable")
+                    rotation_decoded = True
+                except Exception as e:
+                    print(f"Warning: Failed to decode {token_env}: {e}")
     
-    _decode_file_from_env('YOUTUBE_TOKEN_JSON', 'token.json')
-    if not Path('token.json').exists():
-        _decode_file_from_env('TOKEN_B64', 'token.json')
+    # If no rotation credentials found, fall back to single credentials
+    if not rotation_decoded:
+        _decode_file_from_env('YOUTUBE_CLIENT_SECRET_B64', 'client_secret.json')
+        if not Path('client_secret.json').exists():
+            _decode_file_from_env('CLIENT_SECRET_B64', 'client_secret.json')
+        
+        # For single token, it might be plain JSON or base64
+        token_env = os.getenv('YOUTUBE_TOKEN_JSON')
+        if token_env and not Path('token.json').exists():
+            try:
+                # Try to decode as base64 first
+                decoded = base64.b64decode(token_env).decode('utf-8')
+                Path('token.json').write_text(decoded, encoding='utf-8')
+                print("✓ token.json created from environment variable")
+            except:
+                # If not base64, assume it's plain JSON
+                Path('token.json').write_text(token_env, encoding='utf-8')
+                print("✓ token.json created from environment variable (plain JSON)")
+        
+        if not Path('token.json').exists():
+            _decode_file_from_env('TOKEN_B64', 'token.json')
 
     config = _load_base_config()
     youtube_settings = _ensure_section(config, 'youtube_settings')
