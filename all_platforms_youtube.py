@@ -120,18 +120,14 @@ MAX_VIDEO_AGE_HOURS = int(os.getenv("MAX_VIDEO_AGE_HOURS", "24"))
 INSTAGRAM_SESSION_ID = os.getenv("INSTAGRAM_SESSION_ID", "")
 INSTAGRAM_USERNAME   = os.getenv("INSTAGRAM_USERNAME", "")
 
-# Female detection - disabled by default on Railway (missing system libraries)
-_female_detect_env = os.getenv("ENABLE_FEMALE_DETECTION", "").lower()
-if _female_detect_env in ("true", "1", "yes", "on"):
-    ENABLE_FEMALE_DETECTION = True
-elif _female_detect_env in ("false", "0", "no", "off"):
-    ENABLE_FEMALE_DETECTION = False
-else:
-    # Default: OFF on Railway (missing libxcb), ON locally
-    ENABLE_FEMALE_DETECTION = not IS_RAILWAY
+# Female detection defaults to OFF on Railway (heavy deps), but can be enabled via env var
+ENABLE_FEMALE_DETECTION = (
+    os.getenv("ENABLE_FEMALE_DETECTION", "false" if IS_RAILWAY else "true").lower()
+    == "true"
+)
 
-# Watermark - disabled by default on Railway (static ffmpeg doesn't support drawtext)
-ENABLE_WATERMARK = os.getenv("ENABLE_WATERMARK", "false" if IS_RAILWAY else "true").lower() == "true"
+# Watermark - enabled by default
+ENABLE_WATERMARK = os.getenv("ENABLE_WATERMARK", "true").lower() == "true"
 
 ENABLE_COPYRIGHT_CHECK = os.getenv("ENABLE_COPYRIGHT_CHECK", "true").lower() == "true"
 
