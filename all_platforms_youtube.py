@@ -705,7 +705,7 @@ class VideoProcessor:
             return src   # upload as-is when ffmpeg is missing
         dst = src.parent / f"{src.stem}_wm.mp4"
 
-        def _try_watermark(font_prefix: str) -> bool:
+        def _try_watermark(font_prefix: str, attempt_name: str) -> bool:
             # Escape special characters in watermark text
             safe_text = WATERMARK_TEXT.replace("'", "'\\\\\\''")
             
@@ -726,24 +726,25 @@ class VideoProcessor:
             res = _run(cmd, timeout=300)
             if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
                 return True
-            # Only show error on first attempt
-            if font_prefix:
-                err_snippet = (res.stderr or "")[:400].strip()
-                if err_snippet:
-                    print(f"  ⚠ Watermark attempt failed (rc={res.returncode})")
+            # Show error details for debugging
+            if res.stderr:
+                # Look for the actual error in stderr
+                error_lines = [line for line in res.stderr.split('\n') if 'error' in line.lower() or 'failed' in line.lower()]
+                if error_lines:
+                    print(f"  ⚠ Watermark {attempt_name} failed: {error_lines[0][:200]}")
             if dst.exists():
                 dst.unlink(missing_ok=True)
             return False
 
         # First attempt: no fontfile= — let ffmpeg use its built-in font.
         # This works better with static ffmpeg builds
-        if _try_watermark(""):
+        if _try_watermark("", "attempt 1"):
             _rm(src)
             print("  ✓ Watermark added")
             return dst
 
         # Second attempt: use the system font file (if found).
-        if self._font_prefix and _try_watermark(self._font_prefix):
+        if self._font_prefix and _try_watermark(self._font_prefix, "attempt 2"):
             _rm(src)
             print("  ✓ Watermark added (system font)")
             return dst

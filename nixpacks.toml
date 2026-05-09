@@ -1,11 +1,15 @@
 [phases.setup]
-# Use Nix packages (primary — Railway's nixpacks is Nix-based)
-nixPkgs = ['ffmpeg']
-# Also request via apt as belt-and-suspenders fallback
-aptPkgs = ['ffmpeg']
-
-[phases.install]
-cmds = ['pip install -r requirements-railway.txt']
-
-[start]
-cmd = 'python -u railway_runtime_setup.py && python -u all_platforms_youtube.py'
+aptPkgs = [
+    "libxcb1",
+    "libxcb-render0", 
+    "libxcb-shape0",
+    "libxcb-xfixes0",
+    "libxext6",
+    "libsm6",
+    "libice6",
+    "libx11-6",
+    "libxrender1",
+    "libgomp1",
+    "libglib2.0-0",
+    "fonts-dejavu-core"
+]
