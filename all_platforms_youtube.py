@@ -97,6 +97,7 @@ DEFAULT_TAGS = (
 )
 WATERMARK_TEXT = "Lahori Twins"
 WATERMARK_SIZE = 16  # px — intentionally small
+ENABLE_WATERMARK = os.getenv("ENABLE_WATERMARK", "true").lower() == "true"
 
 CHECK_INTERVAL         = int(os.getenv("CHECK_INTERVAL", "600"))   # seconds
 MAX_VIDEOS_PER_ACCOUNT = int(os.getenv("MAX_VIDEOS_PER_ACCOUNT", "3"))
@@ -702,6 +703,8 @@ class VideoProcessor:
 
     def add_watermark(self, src: Path) -> Path:
         """Burn a small centred 'Lahori Twins' text into the video."""
+        if not ENABLE_WATERMARK:
+            return src  # watermark disabled
         if not FFMPEG_AVAILABLE:
             return src   # upload as-is when ffmpeg is missing
         dst = src.parent / f"{src.stem}_wm.mp4"
@@ -727,12 +730,12 @@ class VideoProcessor:
             res = _run(cmd, timeout=300)
             if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
                 return True
-            # Show error details for debugging
-            if res.stderr:
+            # Show error details for debugging (only once)
+            if attempt_name == "attempt 1" and res.stderr:
                 # Look for the actual error in stderr
                 error_lines = [line for line in res.stderr.split('\n') if 'error' in line.lower() or 'failed' in line.lower()]
                 if error_lines:
-                    print(f"  ⚠ Watermark {attempt_name} failed: {error_lines[0][:200]}")
+                    print(f"  ⚠ Watermark failed: {error_lines[0][:150]}")
             if dst.exists():
                 dst.unlink(missing_ok=True)
             return False
@@ -750,7 +753,7 @@ class VideoProcessor:
             print("  ✓ Watermark added (system font)")
             return dst
 
-        print("  ⚠ Watermark failed — uploading original")
+        # Silently return original if watermark fails
         return src
 
 

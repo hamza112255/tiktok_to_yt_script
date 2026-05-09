@@ -1,0 +1,12 @@
+libxcb1
+libxcb-render0
+libxcb-shape0
+libxcb-xfixes0
+libxext6
+libsm6
+libice6
+libx11-6
+libxrender1
+libgomp1
+libglib2.0-0
+fonts-dejavu-core
