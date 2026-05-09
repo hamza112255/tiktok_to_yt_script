@@ -104,8 +104,9 @@ MAX_FILE_SIZE          = os.getenv("MAX_FILE_SIZE", "100M")
 AUDD_API_KEY           = os.getenv("AUDD_API_KEY", "")
 
 # YouTube Data API v3 quota: 10,000 units/day; each upload costs 1,600 units → ~6 max.
-# Keep at 5 by default to leave headroom for other API calls.
-MAX_UPLOADS_PER_DAY = int(os.getenv("MAX_UPLOADS_PER_DAY", "5"))
+# With rotation (3 projects), we have 30,000 units/day → ~18 uploads max.
+# Set to 999 (unlimited) by default - let quota rotation handle the limits.
+MAX_UPLOADS_PER_DAY = int(os.getenv("MAX_UPLOADS_PER_DAY", "999"))
 
 # Only download/upload content published within the last N hours.
 # Using hours (not days) so the bot only ever touches truly recent content —
