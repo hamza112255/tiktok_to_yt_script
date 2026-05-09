@@ -1061,10 +1061,18 @@ class AllPlatformsBot:
         print("\n── TikTok ────────────────────────────────")
         for user in TIKTOK_ACCOUNTS:
             print(f"  @{user}")
-            for media, info in self.dl.fetch(
-                f"https://www.tiktok.com/@{user}", f"tt_{user[:12]}"
-            ):
-                self._handle(media, info, "tiktok", user)
+            try:
+                videos_found = 0
+                for media, info in self.dl.fetch(
+                    f"https://www.tiktok.com/@{user}", f"tt_{user[:12]}"
+                ):
+                    videos_found += 1
+                    self._handle(media, info, "tiktok", user)
+                
+                if videos_found == 0:
+                    print(f"    No new videos found for @{user}")
+            except Exception as e:
+                print(f"    ✗ Error fetching @{user}: {e}")
 
     # ── Cycle + main loop ─────────────────────────────────────────────────
 
