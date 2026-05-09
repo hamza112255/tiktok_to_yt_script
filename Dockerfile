@@ -15,8 +15,7 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     libglib2.0-0 \
     fonts-dejavu-core \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -32,4 +31,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Run the setup script then the main script
-CMD python railway_runtime_setup.py && python all_platforms_youtube.py
+CMD ["sh", "-c", "python railway_runtime_setup.py && python all_platforms_youtube.py"]
