@@ -25,7 +25,9 @@ wheels/
 
 # Credentials and tokens
 client_secret.json
+client_secret_*.json
 token.json
+token_*.json
 config.json
 railway_credentials.txt
 

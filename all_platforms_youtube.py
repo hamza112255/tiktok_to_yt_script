@@ -45,49 +45,46 @@ IS_RAILWAY = any(
 #  ACCOUNT LISTS
 # ════════════════════════════════════════════════════════════════════════════
 
-INSTAGRAM_ACCOUNTS = [
-    "i.haiderr",
-    "rajab.butt94",
-    "sardar_maan_dogar_",
-    "nadeemmubarakofficial",
-    "shazi.ssb",
-    "choudary_hasham.100",
-    "jahangir67310",
-    "musatariq_12",
-    "abdullahkhanhere",
-]
+# DISABLED - Instagram accounts (uncomment to enable)
+# INSTAGRAM_ACCOUNTS = [
+#     "i.haiderr",
+#     "rajab.butt94",
+#     "sardar_maan_dogar_",
+#     "nadeemmubarakofficial",
+#     "shazi.ssb",
+#     "choudary_hasham.100",
+#     "jahangir67310",
+#     "musatariq_12",
+#     "abdullahkhanhere",
+# ]
+INSTAGRAM_ACCOUNTS = []
 
-SNAPCHAT_ACCOUNTS = [
-    "rajab.butt7",
-    "i-haiderr",
-    "maandogar12",
-    "i_shazi10",
-    "m_k1k25",
-    "nadeemmubarak",
-    "jahangir.butt",
-]
+# DISABLED - Snapchat accounts (uncomment to enable)
+# SNAPCHAT_ACCOUNTS = [
+#     "rajab.butt7",
+#     "i-haiderr",
+#     "maandogar12",
+#     "i_shazi10",
+#     "m_k1k25",
+#     "nadeemmubarak",
+#     "jahangir.butt",
+# ]
+SNAPCHAT_ACCOUNTS = []
 
-# Specific story / spotlight URLs
-SNAPCHAT_STORY_URLS = [
-    "https://www.snapchat.com/@rajab.butt7/--r0KL06Tf6TEY_HSO2L5QAAgbGVlY2NvaWVwAZ3safxmAZ3saXqgAAAAAA",
-    "https://www.snapchat.com/@i-haiderr/bxDWFxIIStOqaQBg6BmYnAAAgdXBmc2ZhempvAZ3p1pUhAZ3p1ltlAAAAAA",
-    "https://www.snapchat.com/@maandogar12/qtB2_PAyRd69OUyc93IMXQAAgbGJrd3hjaXlrAZ3tyKjOAZ3tyJ5EAAAAAA",
-    "https://www.snapchat.com/@i_shazi10/WtyCGS-4R7y4gvBdTXqj1gAAgeHZtbW5zbG1vAZ3tyO9KAZ3txwpVAAAAAA",
-    "https://www.snapchat.com/@m_k1k25/YunQmyv4QJKM_Jrk06cjxAAAgdGN0dm11cHBlAZ3p0S1CAZ3p0SwmAAAAAA",
-    "https://www.snapchat.com/@nadeemmubarak/pdlTYa8PQ4yhyP6mR4iAXQAAgc3BtaGFlZGF4AZ3tLyEPAZ3tLxdMAAAAAA",
-]
+# DISABLED - Specific story / spotlight URLs (uncomment to enable)
+# SNAPCHAT_STORY_URLS = [
+#     "https://www.snapchat.com/@rajab.butt7/--r0KL06Tf6TEY_HSO2L5QAAgbGVlY2NvaWVwAZ3safxmAZ3saXqgAAAAAA",
+#     "https://www.snapchat.com/@i-haiderr/bxDWFxIIStOqaQBg6BmYnAAAgdXBmc2ZhempvAZ3p1pUhAZ3p1ltlAAAAAA",
+#     "https://www.snapchat.com/@maandogar12/qtB2_PAyRd69OUyc93IMXQAAgbGJrd3hjaXlrAZ3tyKjOAZ3tyJ5EAAAAAA",
+#     "https://www.snapchat.com/@i_shazi10/WtyCGS-4R7y4gvBdTXqj1gAAgeHZtbW5zbG1vAZ3tyO9KAZ3txwpVAAAAAA",
+#     "https://www.snapchat.com/@m_k1k25/YunQmyv4QJKM_Jrk06cjxAAAgdGN0dm11cHBlAZ3p0S1CAZ3p0SwmAAAAAA",
+#     "https://www.snapchat.com/@nadeemmubarak/pdlTYa8PQ4yhyP6mR4iAXQAAgc3BtaGFlZGF4AZ3tLyEPAZ3tLxdMAAAAAA",
+# ]
+SNAPCHAT_STORY_URLS = []
 
+# ENABLED - TikTok accounts (ACTIVE)
 TIKTOK_ACCOUNTS = [
-    "rajabsfamily2",
-    "buttisback0.07",
-    "nadeemmubarakofficial",
-    "i.haiderr",
-    "maandogardogarisback",
-    "musakhann1003",
-    "raajabbutt1",
-    "man.dogar6",
-    "haider.shah1400",
-    "jahangirbutt914",
+    "lahoritwins",
     "shahbazbukhari145",
     "rajab14family512",
     "buttisback.007",
@@ -347,21 +344,86 @@ class YouTubeUploader:
 
     # ── Auth ──────────────────────────────────────────────────────────────
 
+    def _get_rotation_project(self) -> int:
+        """Get which project to use based on day of month (1-based)."""
+        # For Railway: Check environment variables for multiple projects
+        if IS_RAILWAY:
+            available_projects = []
+            for i in range(1, 100):
+                if os.getenv(f"YOUTUBE_CLIENT_SECRET_{i}_B64") or os.getenv(f"YOUTUBE_TOKEN_{i}_JSON"):
+                    available_projects.append(i)
+                elif i > 10:
+                    break
+            
+            if available_projects:
+                day_of_month = datetime.now().day
+                project_index = (day_of_month - 1) % len(available_projects)
+                return available_projects[project_index]
+        
+        # For Local: Check file system for multiple projects
+        else:
+            available_projects = []
+            for i in range(1, 100):
+                if (BASE_DIR / f"client_secret_{i}.json").exists():
+                    available_projects.append(i)
+                elif i > 10:
+                    break
+            
+            if available_projects:
+                day_of_month = datetime.now().day
+                project_index = (day_of_month - 1) % len(available_projects)
+                return available_projects[project_index]
+        
+        return 0  # Fall back to default (no rotation)
+
     def _auth(self):
         try:
-            token_file  = BASE_DIR / "token.json"
-            secret_file = BASE_DIR / "client_secret.json"
-
-            token_env = os.getenv("YOUTUBE_TOKEN_JSON")
-            if token_env and not token_file.exists():
-                token_file.write_text(token_env, encoding="utf-8")
+            # Determine which project to use
+            project_num = self._get_rotation_project()
+            
+            if project_num > 0:
+                # Use rotated credentials
+                token_file  = BASE_DIR / f"token_{project_num}.json"
+                secret_file = BASE_DIR / f"client_secret_{project_num}.json"
+                print(f"🔄 Using Project {project_num} (Day {datetime.now().day} rotation)")
+                
+                # For Railway: Check environment variables with project number
+                if IS_RAILWAY:
+                    token_env = os.getenv(f"YOUTUBE_TOKEN_{project_num}_JSON")
+                    if token_env and not token_file.exists():
+                        token_file.write_text(token_env, encoding="utf-8")
+                    
+                    if not secret_file.exists():
+                        secret_b64 = os.getenv(f"YOUTUBE_CLIENT_SECRET_{project_num}_B64")
+                        if secret_b64:
+                            secret_file.write_bytes(base64.b64decode(secret_b64))
+            else:
+                # Fall back to default credentials
+                token_file  = BASE_DIR / "token.json"
+                secret_file = BASE_DIR / "client_secret.json"
+                
+                # For Railway: Check default environment variables
+                if IS_RAILWAY:
+                    token_env = os.getenv("YOUTUBE_TOKEN_JSON")
+                    if token_env and not token_file.exists():
+                        token_file.write_text(token_env, encoding="utf-8")
 
             if not secret_file.exists():
-                secret_b64 = os.getenv("YOUTUBE_CLIENT_SECRET_B64")
-                if secret_b64:
-                    secret_file.write_bytes(base64.b64decode(secret_b64))
+                if not IS_RAILWAY or project_num == 0:
+                    secret_b64 = os.getenv("YOUTUBE_CLIENT_SECRET_B64")
+                    if secret_b64:
+                        secret_file.write_bytes(base64.b64decode(secret_b64))
+                    else:
+                        if project_num > 0:
+                            print(f"⚠ client_secret_{project_num}.json not found — YouTube upload disabled")
+                        else:
+                            print("⚠ client_secret.json not found — YouTube upload disabled")
+                        return
                 else:
-                    print("⚠ client_secret.json not found — YouTube upload disabled")
+                    if project_num > 0:
+                        print(f"⚠ client_secret_{project_num}.json not found — YouTube upload disabled")
+                    else:
+                        print("⚠ client_secret.json not found — YouTube upload disabled")
                     return
 
             creds = None
