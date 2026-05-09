@@ -85,10 +85,6 @@ SNAPCHAT_STORY_URLS = []
 # ENABLED - TikTok accounts (ACTIVE)
 TIKTOK_ACCOUNTS = [
     "lahoritwins",
-    "shahbazbukhari145",
-    "rajab14family512",
-    "buttisback.007",
-    "rajabfamily_5567",
 ]
 
 # ════════════════════════════════════════════════════════════════════════════
