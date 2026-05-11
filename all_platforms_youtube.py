@@ -577,6 +577,8 @@ class FemaleDetector:
     def _load(self) -> bool:
         if self._ready is None:
             try:
+                os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+                os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
                 from deepface import DeepFace  # noqa: PLC0415
 
                 self._df    = DeepFace
