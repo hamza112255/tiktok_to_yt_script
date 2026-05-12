@@ -766,17 +766,21 @@ class VideoProcessor:
 
     def anti_copyright_transform(self, src: Path) -> Path:
         """
-        Pitch-shift audio +6 % (keeping duration) and apply a subtle colour
-        grade so Content ID fingerprints no longer match the original.
-        Falls back to returning src unchanged if ffmpeg fails.
+        Crop 8% from edges + pitch-shift audio +6% (duration preserved) +
+        subtle colour grade.  Changes both visual and audio Content ID fingerprints.
         """
         if not FFMPEG_AVAILABLE:
             return src
         dst = src.parent / f"{src.stem}_ac.mp4"
-        # asetrate raises declared sample-rate → pitch up; aresample converts back to
-        # 44100 Hz; atempo=0.9434 compensates speed so duration stays the same.
+        # Crop 8% from every edge (removes TikTok watermarks, shifts visual fingerprint)
+        # then colour-grade subtly.
+        vf = (
+            "crop=iw*0.92:ih*0.92:(iw-iw*0.92)/2:(ih-ih*0.92)/2,"
+            "eq=brightness=0.02:saturation=1.08:contrast=1.02"
+        )
+        # asetrate pitches up by 6%; atempo=0.9434 compensates speed so duration
+        # stays the same (1/1.06 ≈ 0.9434).
         af = "asetrate=44100*1.06,aresample=44100,atempo=0.9434"
-        vf = "eq=brightness=0.02:saturation=1.08:contrast=1.02"
         cmd = [
             FFMPEG_PATH, "-i", str(src),
             "-vf", vf, "-af", af,
@@ -786,7 +790,7 @@ class VideoProcessor:
         res = _run(cmd, timeout=300)
         if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
             _rm(src)
-            print("  ✓ Copyright transform applied (pitch+colour)")
+            print("  ✓ Copyright transform applied (crop+pitch+colour)")
             return dst
         if dst.exists():
             dst.unlink(missing_ok=True)
@@ -794,35 +798,41 @@ class VideoProcessor:
 
     def replace_audio_track(self, src: Path) -> Path:
         """
-        Strip original audio and replace with a royalty-free track looped to
-        match the full video length.  Video stream is copied (no re-encode).
+        Crop 8% from edges + replace audio entirely with a looped royalty-free
+        track — both visual and audio fingerprints change in one ffmpeg pass.
         Requires Track 1.mpeg or Track 2.mpeg in the project dir.
+        Falls back to anti_copyright_transform when tracks are missing.
         """
         if not self._audio_tracks or not FFMPEG_AVAILABLE:
-            print("  ⚠ No royalty-free tracks found — skipping audio replace")
-            return src
+            print("  ⚠ No royalty-free tracks — falling back to pitch transform")
+            return self.anti_copyright_transform(src)
         audio = random.choice(self._audio_tracks)
         dst   = src.parent / f"{src.stem}_ra.mp4"
-        # -stream_loop -1 loops the short audio track indefinitely;
-        # -shortest stops the output when the video stream ends.
+        # Crop edges (visual fingerprint) + replace audio with looped royalty-free track.
+        # -stream_loop -1 loops the short track; -shortest stops at video end.
+        vf = (
+            "crop=iw*0.92:ih*0.92:(iw-iw*0.92)/2:(ih-ih*0.92)/2,"
+            "eq=brightness=0.02:saturation=1.08"
+        )
         cmd = [
             FFMPEG_PATH,
             "-i", str(src),
             "-stream_loop", "-1", "-i", str(audio),
             "-map", "0:v:0", "-map", "1:a:0",
-            "-c:v", "copy",
+            "-vf", vf,
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
             "-c:a", "aac", "-b:a", "128k",
             "-shortest", "-y", str(dst),
         ]
         res = _run(cmd, timeout=300)
         if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
             _rm(src)
-            print(f"  ✓ Audio replaced with royalty-free track ({audio.name})")
+            print(f"  ✓ Crop + audio replaced ({audio.name})")
             return dst
         if dst.exists():
             dst.unlink(missing_ok=True)
-        print("  ⚠ Audio replace failed — uploading with original audio")
-        return src
+        print("  ⚠ Audio replace failed — falling back to pitch transform")
+        return self.anti_copyright_transform(src)
 
 
 # ════════════════════════════════════════════════════════════════════════════
