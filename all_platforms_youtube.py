@@ -131,6 +131,14 @@ ENABLE_WATERMARK = os.getenv("ENABLE_WATERMARK", "true").lower() == "true"
 
 ENABLE_COPYRIGHT_CHECK = os.getenv("ENABLE_COPYRIGHT_CHECK", "true").lower() == "true"
 
+# Audio copyright avoidance:
+# AUDIO_REPLACE=true  → strip original audio and replace with a royalty-free track
+#                       (strongest; requires Track 1.mpeg or Track 2.mpeg in project dir)
+# AUDIO_TRANSFORM=true (default) → pitch-shift audio +6 % and apply a subtle colour
+#                       grade so Content ID fingerprints no longer match
+AUDIO_REPLACE    = os.getenv("AUDIO_REPLACE",    "false").lower() == "true"
+AUDIO_TRANSFORM  = os.getenv("AUDIO_TRANSFORM",  "true").lower()  == "true"
+
 COPYRIGHT_KEYWORDS = [
     "copyright", "©", "(c)", "all rights reserved", "rights reserved",
     "dmca", "trademark", "™", "®", "licensed", "unauthorized", "proprietary",
@@ -756,6 +764,63 @@ class VideoProcessor:
         # Silently return original if watermark fails
         return src
 
+    def anti_copyright_transform(self, src: Path) -> Path:
+        """
+        Pitch-shift audio +6 % (keeping duration) and apply a subtle colour
+        grade so Content ID fingerprints no longer match the original.
+        Falls back to returning src unchanged if ffmpeg fails.
+        """
+        if not FFMPEG_AVAILABLE:
+            return src
+        dst = src.parent / f"{src.stem}_ac.mp4"
+        # asetrate raises declared sample-rate → pitch up; aresample converts back to
+        # 44100 Hz; atempo=0.9434 compensates speed so duration stays the same.
+        af = "asetrate=44100*1.06,aresample=44100,atempo=0.9434"
+        vf = "eq=brightness=0.02:saturation=1.08:contrast=1.02"
+        cmd = [
+            FFMPEG_PATH, "-i", str(src),
+            "-vf", vf, "-af", af,
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-c:a", "aac", "-b:a", "128k", "-y", str(dst),
+        ]
+        res = _run(cmd, timeout=300)
+        if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
+            _rm(src)
+            print("  ✓ Copyright transform applied (pitch+colour)")
+            return dst
+        if dst.exists():
+            dst.unlink(missing_ok=True)
+        return src
+
+    def replace_audio_track(self, src: Path) -> Path:
+        """
+        Strip original audio and replace with a random royalty-free track.
+        Video stream is copied as-is (fast, no re-encode).
+        Requires at least one of: Track 1.mpeg / Track 2.mpeg in the project dir.
+        """
+        if not self._audio_tracks or not FFMPEG_AVAILABLE:
+            print("  ⚠ No royalty-free tracks found — skipping audio replace")
+            return src
+        audio = random.choice(self._audio_tracks)
+        dst   = src.parent / f"{src.stem}_ra.mp4"
+        cmd   = [
+            FFMPEG_PATH,
+            "-i", str(src), "-i", str(audio),
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "128k",
+            "-shortest", "-y", str(dst),
+        ]
+        res = _run(cmd, timeout=300)
+        if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
+            _rm(src)
+            print(f"  ✓ Audio replaced with royalty-free track ({audio.name})")
+            return dst
+        if dst.exists():
+            dst.unlink(missing_ok=True)
+        print("  ⚠ Audio replace failed — uploading with original audio")
+        return src
+
 
 # ════════════════════════════════════════════════════════════════════════════
 #  yt-dlp Downloader
@@ -1021,14 +1086,20 @@ class AllPlatformsBot:
             self._mark_done(key)
             return
 
-        # 5. Add watermark
+        # 5. Audio copyright avoidance (before watermark so we only re-encode once)
+        if AUDIO_REPLACE:
+            media = self.vp.replace_audio_track(media)
+        elif AUDIO_TRANSFORM:
+            media = self.vp.anti_copyright_transform(media)
+
+        # 6. Add watermark
         media = self.vp.add_watermark(media)
 
-        # 6. Upload to YouTube
+        # 7. Upload to YouTube
         title, desc = self._make_meta(info)
         ok = self.uploader.upload(media, title, desc)
 
-        # 7. Delete local file
+        # 8. Delete local file
         _rm(media)
         if ok:
             self._mark_done(key)
@@ -1116,6 +1187,8 @@ class AllPlatformsBot:
         print(f"  Female detection   : {'ON' if ENABLE_FEMALE_DETECTION else 'OFF'}")
         print(f"  Copyright check    : {'ON' if ENABLE_COPYRIGHT_CHECK else 'OFF'}")
         print(f"  AudD fingerprint   : {'ON' if AUDD_API_KEY else 'OFF (keyword-only)'}")
+        audio_mode = "replace" if AUDIO_REPLACE else ("transform (pitch+colour)" if AUDIO_TRANSFORM else "OFF")
+        print(f"  Audio copyright    : {audio_mode}")
         print(f"  YouTube upload     : {'ON' if self.uploader.enabled else 'OFF (no creds)'}")
         print("═" * 54)
 
