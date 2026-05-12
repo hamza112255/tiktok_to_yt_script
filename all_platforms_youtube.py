@@ -794,18 +794,21 @@ class VideoProcessor:
 
     def replace_audio_track(self, src: Path) -> Path:
         """
-        Strip original audio and replace with a random royalty-free track.
-        Video stream is copied as-is (fast, no re-encode).
-        Requires at least one of: Track 1.mpeg / Track 2.mpeg in the project dir.
+        Strip original audio and replace with a royalty-free track looped to
+        match the full video length.  Video stream is copied (no re-encode).
+        Requires Track 1.mpeg or Track 2.mpeg in the project dir.
         """
         if not self._audio_tracks or not FFMPEG_AVAILABLE:
             print("  ⚠ No royalty-free tracks found — skipping audio replace")
             return src
         audio = random.choice(self._audio_tracks)
         dst   = src.parent / f"{src.stem}_ra.mp4"
-        cmd   = [
+        # -stream_loop -1 loops the short audio track indefinitely;
+        # -shortest stops the output when the video stream ends.
+        cmd = [
             FFMPEG_PATH,
-            "-i", str(src), "-i", str(audio),
+            "-i", str(src),
+            "-stream_loop", "-1", "-i", str(audio),
             "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "copy",
             "-c:a", "aac", "-b:a", "128k",
