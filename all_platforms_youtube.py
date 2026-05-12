@@ -603,19 +603,29 @@ class FemaleDetector:
         try:
             import cv2  # noqa: PLC0415
 
-            cap   = cv2.VideoCapture(str(video_path))
-            fps   = max(1, int(cap.get(cv2.CAP_PROP_FPS)))
-            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            step  = fps * 3
-            n     = min(8, max(1, total // step if step else 1))
-            hits  = 0
+            cap = cv2.VideoCapture(str(video_path))
+            fps = max(1.0, cap.get(cv2.CAP_PROP_FPS) or 30.0)
+            raw_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
 
-            print(f"  → Checking {n} frames for female presence…")
-            for i in range(n):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, i * step)
+            # CAP_PROP_FRAME_COUNT is unreliable for many downloaded formats.
+            # Use it only when it looks sane (>30 frames); otherwise assume 60 s.
+            duration_s = (raw_total / fps) if raw_total > 30 else 60.0
+
+            # Sample up to 12 evenly-spaced positions across the full video.
+            n_samples = min(12, max(4, int(duration_s / 5)))
+            sample_times = [duration_s * i / n_samples for i in range(n_samples)]
+
+            hits = 0
+            checked = 0
+            print(f"  → Checking {n_samples} frames ({duration_s:.0f}s) for female presence…")
+
+            for t_s in sample_times:
+                # Time-based seek — not affected by wrong frame-count metadata.
+                cap.set(cv2.CAP_PROP_POS_MSEC, t_s * 1000)
                 ok, frame = cap.read()
                 if not ok:
-                    break
+                    continue
+                checked += 1
                 try:
                     result = self._df.analyze(
                         frame,
@@ -624,20 +634,27 @@ class FemaleDetector:
                         silent=True,
                     )
                     faces = result if isinstance(result, list) else [result]
-                    if any(
-                        f.get("dominant_gender", "").lower() == "woman"
-                        for f in faces
-                    ):
-                        hits += 1
+                    for face in faces:
+                        dominant = face.get("dominant_gender", "").lower()
+                        # Also check raw Woman score — hijab/head-cover causes
+                        # DeepFace to mark dominant_gender as Man even for women.
+                        woman_pct = face.get("gender", {}).get("Woman", 0)
+                        if dominant == "woman" or woman_pct > 25:
+                            hits += 1
+                            break
                 except Exception:
                     pass
 
             cap.release()
-            rate = hits / n if n else 0
-            if rate > 0.3:
-                print(f"  ⚠ Female detected ({rate * 100:.0f}% of frames) — skipping")
+
+            if checked == 0:
+                return False
+
+            # Skip the video if female is detected in ANY sampled frame.
+            if hits >= 1:
+                print(f"  ⚠ Female detected ({hits}/{checked} frames) — skipping")
                 return True
-            print(f"  ✓ No female detected ({n} frames checked)")
+            print(f"  ✓ No female detected ({checked} frames checked)")
             return False
         except Exception as e:
             print(f"  ⚠ Gender check error: {e}")
