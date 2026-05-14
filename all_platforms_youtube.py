@@ -372,8 +372,8 @@ class YouTubeUploader:
 
         now       = datetime.now()
         to_remove = []
-        pending   = [vid for vid, ts in data.items()
-                     if (now - datetime.fromisoformat(ts)).total_seconds() / 60 >= 10]
+        pending = [vid for vid, ts in data.items()
+                   if (now - datetime.fromisoformat(ts)).total_seconds() / 60 >= 2]
         if pending:
             print(f"  🔍 Checking {len(pending)} uploaded video(s) for YouTube restrictions…")
 
@@ -386,8 +386,8 @@ class YouTubeUploader:
 
             age_minutes = (now - upload_time).total_seconds() / 60
 
-            # Wait at least 10 minutes for YouTube to finish processing
-            if age_minutes < 10:
+            # Give YouTube at least 2 minutes to register the upload
+            if age_minutes < 2:
                 continue
             # Stop tracking entries older than 48 hours
             if age_minutes > 48 * 60:
@@ -402,7 +402,6 @@ class YouTubeUploader:
 
                 items = resp.get("items", [])
                 if not items:
-                    # Video gone (deleted externally or never published)
                     to_remove.append(video_id)
                     continue
 
@@ -412,10 +411,14 @@ class YouTubeUploader:
                 privacy_status   = status.get("privacyStatus", "public")
                 rejection_reason = status.get("rejectionReason", "")
 
+                # YouTube hasn't finished processing yet — wait for next cycle
+                if upload_status in ("uploaded", ""):
+                    print(f"  ⏳ Video {video_id} still processing — will check next cycle")
+                    continue
+
                 # Content ID regional block (shows as "Partially blocked" in Studio)
                 region_restriction = item.get("contentDetails", {}).get("regionRestriction", {})
                 blocked_regions    = region_restriction.get("blocked", [])
-                # "allowed" list present = video only permitted in those specific countries
                 allowed_regions    = region_restriction.get("allowed", [])
 
                 is_restricted = False
@@ -427,15 +430,12 @@ class YouTubeUploader:
                         f", reason={rejection_reason}" if rejection_reason else ""
                     )
                 elif upload_status == "processed" and privacy_status != "public":
-                    # Privacy changed from public → copyright takedown / age-restriction
                     is_restricted = True
                     reason = f"privacyStatus changed to '{privacy_status}'"
                 elif blocked_regions:
-                    # Content ID claim → blocked in some or all regions ("Partially blocked")
                     is_restricted = True
                     reason = f"Content ID claim — blocked in {len(blocked_regions)} region(s)"
                 elif 0 < len(allowed_regions) < 10:
-                    # Inverse block: only allowed in a tiny whitelist of countries
                     is_restricted = True
                     reason = f"Content ID claim — only allowed in {len(allowed_regions)} region(s)"
 
@@ -447,7 +447,7 @@ class YouTubeUploader:
                     except Exception as e:
                         print(f"  ✗ Could not delete {video_id}: {e}")
                 else:
-                    print(f"  ✓ Video {video_id} — no restriction (uploadStatus={upload_status})")
+                    print(f"  ✓ Video {video_id} — clean (uploadStatus={upload_status})")
 
                 to_remove.append(video_id)
 
