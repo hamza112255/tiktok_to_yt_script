@@ -429,7 +429,8 @@ class YouTubeUploader:
                     reason = f"uploadStatus={upload_status}" + (
                         f", reason={rejection_reason}" if rejection_reason else ""
                     )
-                elif upload_status == "processed" and privacy_status != "public":
+                elif upload_status == "processed" and privacy_status not in ("public", "private"):
+                    # YouTube changed privacy away from our private setting — copyright takedown
                     is_restricted = True
                     reason = f"privacyStatus changed to '{privacy_status}'"
                 elif blocked_regions:
@@ -447,7 +448,15 @@ class YouTubeUploader:
                     except Exception as e:
                         print(f"  ✗ Could not delete {video_id}: {e}")
                 else:
-                    print(f"  ✓ Video {video_id} — clean (uploadStatus={upload_status})")
+                    # Clean — make it public now
+                    try:
+                        self.yt.videos().update(
+                            part="status",
+                            body={"id": video_id, "status": {"privacyStatus": "public"}},
+                        ).execute()
+                        print(f"  ✓ Video {video_id} — clean, published public")
+                    except Exception as e:
+                        print(f"  ✗ Could not publish {video_id}: {e}")
 
                 to_remove.append(video_id)
 
@@ -604,7 +613,7 @@ class YouTubeUploader:
                     "categoryId":  "24",  # Entertainment
                 },
                 "status": {
-                    "privacyStatus":           "public",
+                    "privacyStatus":           "private",
                     "selfDeclaredMadeForKids": False,
                 },
             }
