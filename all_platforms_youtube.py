@@ -11,7 +11,6 @@ import hashlib
 import json
 import os
 import platform
-import random
 import subprocess
 import sys
 import time
@@ -132,11 +131,8 @@ ENABLE_WATERMARK = os.getenv("ENABLE_WATERMARK", "true").lower() == "true"
 ENABLE_COPYRIGHT_CHECK = os.getenv("ENABLE_COPYRIGHT_CHECK", "true").lower() == "true"
 
 # Audio copyright avoidance:
-# AUDIO_REPLACE=true  → strip original audio and replace with a royalty-free track
-#                       (strongest; requires Track 1.mpeg or Track 2.mpeg in project dir)
 # AUDIO_TRANSFORM=true (default) → pitch-shift audio +6 % and apply a subtle colour
 #                       grade so Content ID fingerprints no longer match
-AUDIO_REPLACE    = os.getenv("AUDIO_REPLACE",    "false").lower() == "true"
 AUDIO_TRANSFORM  = os.getenv("AUDIO_TRANSFORM",  "true").lower()  == "true"
 
 COPYRIGHT_KEYWORDS = [
@@ -349,6 +345,98 @@ class YouTubeUploader:
         except Exception:
             pass
 
+    # ── Uploaded video restriction tracking ──────────────────────────────
+
+    _UPLOADED_FILE = BASE_DIR / "yt_uploaded.json"
+
+    def _load_uploaded_ids(self) -> dict:
+        try:
+            if self._UPLOADED_FILE.exists():
+                return json.loads(self._UPLOADED_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+        return {}
+
+    def _save_uploaded_id(self, video_id: str) -> None:
+        data = self._load_uploaded_ids()
+        data[video_id] = datetime.now().isoformat()
+        self._UPLOADED_FILE.write_text(json.dumps(data), encoding="utf-8")
+
+    def check_and_remove_restricted(self) -> None:
+        """Check recently uploaded videos for YouTube restrictions and auto-delete them."""
+        if not self.enabled:
+            return
+        data = self._load_uploaded_ids()
+        if not data:
+            return
+
+        now       = datetime.now()
+        to_remove = []
+
+        for video_id, upload_time_str in list(data.items()):
+            try:
+                upload_time = datetime.fromisoformat(upload_time_str)
+            except Exception:
+                to_remove.append(video_id)
+                continue
+
+            age_minutes = (now - upload_time).total_seconds() / 60
+
+            # Wait at least 10 minutes for YouTube to finish processing
+            if age_minutes < 10:
+                continue
+            # Stop tracking entries older than 48 hours
+            if age_minutes > 48 * 60:
+                to_remove.append(video_id)
+                continue
+
+            try:
+                resp = self.yt.videos().list(
+                    part="status",
+                    id=video_id,
+                ).execute()
+
+                items = resp.get("items", [])
+                if not items:
+                    # Video gone (deleted externally or never published)
+                    to_remove.append(video_id)
+                    continue
+
+                status           = items[0].get("status", {})
+                upload_status    = status.get("uploadStatus", "")
+                privacy_status   = status.get("privacyStatus", "public")
+                rejection_reason = status.get("rejectionReason", "")
+
+                is_restricted = False
+                reason        = ""
+
+                if upload_status in ("rejected", "failed"):
+                    is_restricted = True
+                    reason = f"uploadStatus={upload_status}" + (
+                        f", reason={rejection_reason}" if rejection_reason else ""
+                    )
+                elif upload_status == "processed" and privacy_status != "public":
+                    # We uploaded as public — a privacy change means YouTube restricted it
+                    is_restricted = True
+                    reason = f"privacyStatus changed to '{privacy_status}' (copyright claim)"
+
+                if is_restricted:
+                    print(f"  ⚠ Video {video_id} restricted ({reason}) — deleting from YouTube")
+                    try:
+                        self.yt.videos().delete(id=video_id).execute()
+                        print(f"  ✓ Deleted restricted video: {video_id}")
+                    except Exception as e:
+                        print(f"  ✗ Could not delete {video_id}: {e}")
+
+                to_remove.append(video_id)
+
+            except Exception as e:
+                print(f"  ⚠ Could not check video {video_id}: {e}")
+
+        for vid_id in to_remove:
+            data.pop(vid_id, None)
+        self._UPLOADED_FILE.write_text(json.dumps(data), encoding="utf-8")
+
     def quota_status(self) -> str:
         return f"{self._today_count}/{MAX_UPLOADS_PER_DAY} uploads today"
 
@@ -502,6 +590,7 @@ class YouTubeUploader:
             self._today_count += 1
             self._save_quota_count()
             vid_id = response["id"]
+            self._save_uploaded_id(vid_id)
             print(f"  ✓ Uploaded [{self._today_count}/{MAX_UPLOADS_PER_DAY} today] → https://youtube.com/watch?v={vid_id}")
             return True
 
@@ -669,58 +758,29 @@ class FemaleDetector:
 class VideoProcessor:
     def __init__(self):
         self._font_prefix = _font_prefix = _font_filter_prefix()
-        self._audio_tracks = [t for t in [
-            BASE_DIR / "Track 1.mpeg",
-            BASE_DIR / "Track 2.mpeg",
-        ] if t.exists()]
 
     def image_to_video(self, img: Path) -> Optional[Path]:
-        """Convert a static image to an MP4 with background music."""
+        """Convert a static image to a silent 15-second MP4."""
         if not FFMPEG_AVAILABLE:
             print("  ⚠ ffmpeg not available — skipping image→video conversion")
             _rm(img)
             return None
-        if not self._audio_tracks:
-            print("  ⚠ No audio tracks found — cannot convert image to video")
-            return None
+        out = img.parent / f"{img.stem}_v.mp4"
         try:
-            audio = random.choice(self._audio_tracks)
-            out   = img.parent / f"{img.stem}_v.mp4"
-
-            # Use system ffprobe if available; imageio-ffmpeg does NOT ship ffprobe.
-            duration = 15.0
-            for ffprobe_candidate in ("ffprobe", "/usr/bin/ffprobe", "/usr/local/bin/ffprobe"):
-                res = _run(
-                    [
-                        ffprobe_candidate, "-v", "error",
-                        "-show_entries", "format=duration",
-                        "-of", "json", str(audio),
-                    ],
-                    timeout=15,
-                )
-                if res.returncode == 0:
-                    try:
-                        duration = min(60.0, float(json.loads(res.stdout)["format"]["duration"]))
-                    except Exception:
-                        pass
-                    break
-
             cmd = [
-                FFMPEG_PATH, "-loop", "1", "-i", str(img), "-i", str(audio),
-                "-c:v", "libx264", "-t", str(duration), "-pix_fmt", "yuv420p",
+                FFMPEG_PATH, "-loop", "1", "-i", str(img),
+                "-c:v", "libx264", "-t", "15", "-pix_fmt", "yuv420p",
                 "-vf",
                 "scale=1080:1920:force_original_aspect_ratio=decrease,"
                 "pad=1080:1920:(ow-iw)/2:(oh-ih)/2",
-                "-c:a", "aac", "-b:a", "128k", "-shortest", "-y", str(out),
+                "-an", "-y", str(out),
             ]
-            res = _run(cmd, timeout=120)
+            res = _run(cmd, timeout=60)
             if res.returncode == 0 and out.exists() and out.stat().st_size > 1024:
                 _rm(img)
-                print(f"  ✓ Image → video: {out.name}")
+                print(f"  ✓ Image → video (silent): {out.name}")
                 return out
-            # Show first 800 chars of stderr — ffmpeg errors appear at the start,
-            # progress lines appear at the end (those are useless for diagnosis).
-            err_snippet = (res.stderr or "")[:800].strip()
+            err_snippet = (res.stderr or "")[:400].strip()
             print(f"  ⚠ image_to_video failed (rc={res.returncode}): {err_snippet}")
         except Exception as e:
             print(f"  ⚠ image_to_video: {e}")
@@ -812,44 +872,6 @@ class VideoProcessor:
         if dst.exists():
             dst.unlink(missing_ok=True)
         return src
-
-    def replace_audio_track(self, src: Path) -> Path:
-        """
-        Crop 8% from edges + replace audio entirely with a looped royalty-free
-        track — both visual and audio fingerprints change in one ffmpeg pass.
-        Requires Track 1.mpeg or Track 2.mpeg in the project dir.
-        Falls back to anti_copyright_transform when tracks are missing.
-        """
-        if not self._audio_tracks or not FFMPEG_AVAILABLE:
-            print("  ⚠ No royalty-free tracks — falling back to pitch transform")
-            return self.anti_copyright_transform(src)
-        audio = random.choice(self._audio_tracks)
-        dst   = src.parent / f"{src.stem}_ra.mp4"
-        # Crop edges (visual fingerprint) + replace audio with looped royalty-free track.
-        # -stream_loop -1 loops the short track; -shortest stops at video end.
-        vf = (
-            "crop=iw*0.92:ih*0.92:(iw-iw*0.92)/2:(ih-ih*0.92)/2,"
-            "eq=brightness=0.02:saturation=1.08"
-        )
-        cmd = [
-            FFMPEG_PATH,
-            "-i", str(src),
-            "-stream_loop", "-1", "-i", str(audio),
-            "-map", "0:v:0", "-map", "1:a:0",
-            "-vf", vf,
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-            "-c:a", "aac", "-b:a", "128k",
-            "-shortest", "-y", str(dst),
-        ]
-        res = _run(cmd, timeout=300)
-        if res.returncode == 0 and dst.exists() and dst.stat().st_size > 1024:
-            _rm(src)
-            print(f"  ✓ Crop + audio replaced ({audio.name})")
-            return dst
-        if dst.exists():
-            dst.unlink(missing_ok=True)
-        print("  ⚠ Audio replace failed — falling back to pitch transform")
-        return self.anti_copyright_transform(src)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1116,10 +1138,8 @@ class AllPlatformsBot:
             self._mark_done(key)
             return
 
-        # 5. Audio copyright avoidance (before watermark so we only re-encode once)
-        if AUDIO_REPLACE:
-            media = self.vp.replace_audio_track(media)
-        elif AUDIO_TRANSFORM:
+        # 5. Audio copyright avoidance (pitch-shift original audio)
+        if AUDIO_TRANSFORM:
             media = self.vp.anti_copyright_transform(media)
 
         # 6. Add watermark
@@ -1197,8 +1217,9 @@ class AllPlatformsBot:
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"\n{'═'*54}\n  Cycle: {ts}\n{'═'*54}")
         try:
-            self._run_instagram()
-            self._run_snapchat()
+            self.uploader.check_and_remove_restricted()
+            # self._run_instagram()  # disabled — enable after TikTok testing complete
+            # self._run_snapchat()   # disabled — enable after TikTok testing complete
             self._run_tiktok()
         except Exception as e:
             print(f"✗ Cycle error: {e}")
@@ -1217,7 +1238,7 @@ class AllPlatformsBot:
         print(f"  Female detection   : {'ON' if ENABLE_FEMALE_DETECTION else 'OFF'}")
         print(f"  Copyright check    : {'ON' if ENABLE_COPYRIGHT_CHECK else 'OFF'}")
         print(f"  AudD fingerprint   : {'ON' if AUDD_API_KEY else 'OFF (keyword-only)'}")
-        audio_mode = "replace" if AUDIO_REPLACE else ("transform (pitch+colour)" if AUDIO_TRANSFORM else "OFF")
+        audio_mode = "transform (pitch+colour)" if AUDIO_TRANSFORM else "OFF"
         print(f"  Audio copyright    : {audio_mode}")
         print(f"  YouTube upload     : {'ON' if self.uploader.enabled else 'OFF (no creds)'}")
         print("═" * 54)
