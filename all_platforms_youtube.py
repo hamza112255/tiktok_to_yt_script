@@ -372,6 +372,10 @@ class YouTubeUploader:
 
         now       = datetime.now()
         to_remove = []
+        pending   = [vid for vid, ts in data.items()
+                     if (now - datetime.fromisoformat(ts)).total_seconds() / 60 >= 10]
+        if pending:
+            print(f"  🔍 Checking {len(pending)} uploaded video(s) for YouTube restrictions…")
 
         for video_id, upload_time_str in list(data.items()):
             try:
