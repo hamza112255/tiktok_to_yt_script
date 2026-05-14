@@ -132,11 +132,16 @@ def setup_runtime_config():
         if os.getenv(secret_env) or os.getenv(token_env):
             _decode_file_from_env(secret_env, f'client_secret_{i}.json')
             
-            # Token is plain JSON text — write directly, no base64 decoding
+            # Token is plain JSON text — strip control chars Railway dashboard may insert
             token_payload = os.getenv(token_env)
             if token_payload:
                 try:
-                    Path(f'token_{i}.json').write_text(token_payload.strip(), encoding='utf-8')
+                    # Remove newlines/control characters that Railway's UI may inject
+                    import re as _re
+                    cleaned = _re.sub(r'[\x00-\x1f\x7f]+', '', token_payload)
+                    # Round-trip through json to validate and normalise
+                    clean_json = json.dumps(json.loads(cleaned))
+                    Path(f'token_{i}.json').write_text(clean_json, encoding='utf-8')
                     print(f"✓ token_{i}.json created from environment variable")
                     rotation_decoded = True
                 except Exception as e:
