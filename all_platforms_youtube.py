@@ -301,7 +301,7 @@ def _font_filter_prefix() -> str:
 
 
 class YouTubeUploader:
-    SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+    SCOPES = ["https://www.googleapis.com/auth/youtube"]
     _QUOTA_FILE = BASE_DIR / "yt_quota.json"
 
     def __init__(self):
