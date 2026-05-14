@@ -132,17 +132,15 @@ def setup_runtime_config():
         if os.getenv(secret_env) or os.getenv(token_env):
             _decode_file_from_env(secret_env, f'client_secret_{i}.json')
             
-            # Token is already JSON text (not base64), just write it directly
+            # Token is plain JSON text — write directly, no base64 decoding
             token_payload = os.getenv(token_env)
             if token_payload:
                 try:
-                    # Decode from base64 first
-                    decoded = base64.b64decode(token_payload).decode('utf-8')
-                    Path(f'token_{i}.json').write_text(decoded, encoding='utf-8')
+                    Path(f'token_{i}.json').write_text(token_payload.strip(), encoding='utf-8')
                     print(f"✓ token_{i}.json created from environment variable")
                     rotation_decoded = True
                 except Exception as e:
-                    print(f"Warning: Failed to decode {token_env}: {e}")
+                    print(f"Warning: Failed to write {token_env}: {e}")
     
     # If no rotation credentials found, fall back to single credentials
     if not rotation_decoded:
