@@ -512,9 +512,14 @@ class YouTubeUploader:
                 
                 # For Railway: Check environment variables with project number
                 if IS_RAILWAY:
-                    token_env = os.getenv(f"YOUTUBE_TOKEN_{project_num}_JSON")
-                    if token_env and not token_file.exists():
-                        token_file.write_text(token_env, encoding="utf-8")
+                    if not token_file.exists():
+                        token_b64 = os.getenv(f"YOUTUBE_TOKEN_{project_num}_B64")
+                        if token_b64:
+                            token_file.write_bytes(base64.b64decode(token_b64))
+                        else:
+                            token_env = os.getenv(f"YOUTUBE_TOKEN_{project_num}_JSON")
+                            if token_env:
+                                token_file.write_text(token_env, encoding="utf-8")
                     
                     if not secret_file.exists():
                         secret_b64 = os.getenv(f"YOUTUBE_CLIENT_SECRET_{project_num}_B64")

@@ -129,23 +129,12 @@ def setup_runtime_config():
         secret_env = f'YOUTUBE_CLIENT_SECRET_{i}_B64'
         token_env = f'YOUTUBE_TOKEN_{i}_JSON'
         
-        if os.getenv(secret_env) or os.getenv(token_env):
+        token_b64_env = f'YOUTUBE_TOKEN_{i}_B64'
+        if os.getenv(secret_env) or os.getenv(token_b64_env):
             _decode_file_from_env(secret_env, f'client_secret_{i}.json')
-            
-            # Token is plain JSON text — strip control chars Railway dashboard may insert
-            token_payload = os.getenv(token_env)
-            if token_payload:
-                try:
-                    # Remove newlines/control characters that Railway's UI may inject
-                    import re as _re
-                    cleaned = _re.sub(r'[\x00-\x1f\x7f]+', '', token_payload)
-                    # Round-trip through json to validate and normalise
-                    clean_json = json.dumps(json.loads(cleaned))
-                    Path(f'token_{i}.json').write_text(clean_json, encoding='utf-8')
-                    print(f"✓ token_{i}.json created from environment variable")
-                    rotation_decoded = True
-                except Exception as e:
-                    print(f"Warning: Failed to write {token_env}: {e}")
+            _decode_file_from_env(token_b64_env, f'token_{i}.json')
+            if Path(f'token_{i}.json').exists():
+                rotation_decoded = True
     
     # If no rotation credentials found, fall back to single credentials
     if not rotation_decoded:

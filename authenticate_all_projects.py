@@ -130,13 +130,14 @@ def main():
     if ok:
         print(f"✓ Authenticated: projects {ok}")
         print()
-        print("Run these commands to update Railway (copy-paste each line):")
+        print("Go to Railway → Variables and set these values:")
         print()
         for n in ok:
             token_file = BASE_DIR / f"token_{n}.json"
             if token_file.exists():
-                token_json = token_file.read_text(encoding="utf-8").replace("'", "'\\''")
-                print(f"railway variables set YOUTUBE_TOKEN_{n}_JSON='{token_json}'")
+                token_b64 = base64.b64encode(token_file.read_bytes()).decode("ascii")
+                print(f"  Variable name : YOUTUBE_TOKEN_{n}_B64")
+                print(f"  Value         : {token_b64}")
                 print()
 
     if fail:
