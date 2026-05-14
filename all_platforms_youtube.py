@@ -452,6 +452,10 @@ class YouTubeUploader:
                 to_remove.append(video_id)
 
             except Exception as e:
+                err = str(e)
+                if "insufficientPermissions" in err or "invalid_scope" in err:
+                    print("  ⚠ Restriction check needs re-authentication (run authenticate_all_projects.py locally)")
+                    break  # same error will hit every video — stop spamming
                 print(f"  ⚠ Could not check video {video_id}: {e}")
 
         for vid_id in to_remove:

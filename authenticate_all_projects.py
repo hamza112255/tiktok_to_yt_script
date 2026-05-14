@@ -41,6 +41,17 @@ def _get_secret_file(n: int) -> Path | None:
     return None
 
 
+def _token_has_full_scope(token_file: Path) -> bool:
+    """Return True if an existing token already has the full youtube scope."""
+    try:
+        import json
+        data = json.loads(token_file.read_text(encoding="utf-8"))
+        scopes = data.get("scopes", [])
+        return "https://www.googleapis.com/auth/youtube" in scopes
+    except Exception:
+        return False
+
+
 def authenticate_project(n: int) -> bool:
     secret_file = _get_secret_file(n)
     if not secret_file:
@@ -49,7 +60,12 @@ def authenticate_project(n: int) -> bool:
 
     token_file = BASE_DIR / f"token_{n}.json"
 
-    # Always delete old token — it was issued for the wrong scope
+    # Skip if already has full scope
+    if token_file.exists() and _token_has_full_scope(token_file):
+        print(f"  ✓ Project {n} already has full scope — skipping")
+        return True
+
+    # Delete old token — it was issued for the wrong scope
     if token_file.exists():
         token_file.unlink()
         print(f"  🗑  Removed old token_{n}.json (wrong scope)")
@@ -95,7 +111,7 @@ def main():
 
     print(f"Found {len(project_nums)} project(s): {project_nums}")
     print()
-    input("Press Enter to start — a browser window will open for each project...")
+    print("Starting authentication — a browser window will open for each project that needs it...")
     print()
 
     results = {}
