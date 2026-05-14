@@ -301,7 +301,7 @@ def _font_filter_prefix() -> str:
 
 
 class YouTubeUploader:
-    SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+    SCOPES = ["https://www.googleapis.com/auth/youtube"]
     _QUOTA_FILE = BASE_DIR / "yt_quota.json"
 
     def __init__(self):
@@ -396,7 +396,7 @@ class YouTubeUploader:
 
             try:
                 resp = self.yt.videos().list(
-                    part="status",
+                    part="status,contentDetails",
                     id=video_id,
                 ).execute()
 
@@ -406,10 +406,17 @@ class YouTubeUploader:
                     to_remove.append(video_id)
                     continue
 
-                status           = items[0].get("status", {})
+                item             = items[0]
+                status           = item.get("status", {})
                 upload_status    = status.get("uploadStatus", "")
                 privacy_status   = status.get("privacyStatus", "public")
                 rejection_reason = status.get("rejectionReason", "")
+
+                # Content ID regional block (shows as "Partially blocked" in Studio)
+                region_restriction = item.get("contentDetails", {}).get("regionRestriction", {})
+                blocked_regions    = region_restriction.get("blocked", [])
+                # "allowed" list present = video only permitted in those specific countries
+                allowed_regions    = region_restriction.get("allowed", [])
 
                 is_restricted = False
                 reason        = ""
@@ -420,9 +427,17 @@ class YouTubeUploader:
                         f", reason={rejection_reason}" if rejection_reason else ""
                     )
                 elif upload_status == "processed" and privacy_status != "public":
-                    # We uploaded as public — a privacy change means YouTube restricted it
+                    # Privacy changed from public → copyright takedown / age-restriction
                     is_restricted = True
-                    reason = f"privacyStatus changed to '{privacy_status}' (copyright claim)"
+                    reason = f"privacyStatus changed to '{privacy_status}'"
+                elif blocked_regions:
+                    # Content ID claim → blocked in some or all regions ("Partially blocked")
+                    is_restricted = True
+                    reason = f"Content ID claim — blocked in {len(blocked_regions)} region(s)"
+                elif 0 < len(allowed_regions) < 10:
+                    # Inverse block: only allowed in a tiny whitelist of countries
+                    is_restricted = True
+                    reason = f"Content ID claim — only allowed in {len(allowed_regions)} region(s)"
 
                 if is_restricted:
                     print(f"  ⚠ Video {video_id} restricted ({reason}) — deleting from YouTube")
@@ -431,6 +446,8 @@ class YouTubeUploader:
                         print(f"  ✓ Deleted restricted video: {video_id}")
                     except Exception as e:
                         print(f"  ✗ Could not delete {video_id}: {e}")
+                else:
+                    print(f"  ✓ Video {video_id} — no restriction (uploadStatus={upload_status})")
 
                 to_remove.append(video_id)
 
