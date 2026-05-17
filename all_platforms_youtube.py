@@ -370,10 +370,10 @@ class YouTubeUploader:
         try:
             # Poll until video is processed (max 20 minutes)
             max_wait_minutes = 20
-            poll_interval_seconds = 45
+            poll_interval_seconds = 10
             upload_status = ""
             
-            print(f"  ⏳ Waiting for video {video_id} to finish processing…")
+            print(f"  ⏳ Checking video {video_id} for copyright (polling every 10s)…")
             upload_time = datetime.now()
             
             for attempt in range(int(max_wait_minutes * 60 / poll_interval_seconds)):
@@ -395,8 +395,8 @@ class YouTubeUploader:
 
                 # YouTube hasn't finished processing yet — wait and retry
                 if upload_status in ("uploaded", ""):
-                    elapsed = (datetime.now() - upload_time).total_seconds() / 60
-                    print(f"  ⏳ Video {video_id} still processing ({elapsed:.1f} min elapsed)…")
+                    elapsed = (datetime.now() - upload_time).total_seconds()
+                    print(f"  ⏳ Still processing… ({int(elapsed)}s elapsed)")
                     time.sleep(poll_interval_seconds)
                     continue
                 
@@ -801,9 +801,7 @@ class YouTubeUploader:
             self._save_uploaded_id(vid_id)
             print(f"  ✓ Uploaded [{self._today_count}/{MAX_UPLOADS_PER_DAY} today] → https://youtube.com/watch?v={vid_id}")
             
-            # Immediately start checking for copyright (wait 2 min then poll)
-            print(f"  ⏳ Waiting 2 minutes before checking copyright status…")
-            time.sleep(120)  # 2 minute initial buffer
+            # Immediately start checking for copyright
             self._check_single_video(vid_id)
             
             return True
