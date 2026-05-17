@@ -395,6 +395,46 @@ class YouTubeUploader:
                 continue
 
             try:
+                # Poll until video is processed (max 20 minutes)
+                max_wait_minutes = 20
+                poll_interval_seconds = 45
+                upload_status = ""
+                
+                print(f"  ⏳ Waiting for video {video_id} to finish processing…")
+                
+                for attempt in range(int(max_wait_minutes * 60 / poll_interval_seconds)):
+                    resp = self.yt.videos().list(
+                        part="status,contentDetails",
+                        id=video_id,
+                    ).execute()
+
+                    items = resp.get("items", [])
+                    if not items:
+                        to_remove.append(video_id)
+                        break
+
+                    item             = items[0]
+                    status           = item.get("status", {})
+                    upload_status    = status.get("uploadStatus", "")
+                    privacy_status   = status.get("privacyStatus", "public")
+                    rejection_reason = status.get("rejectionReason", "")
+
+                    # YouTube hasn't finished processing yet — wait and retry
+                    if upload_status in ("uploaded", ""):
+                        elapsed = (datetime.now() - upload_time).total_seconds() / 60
+                        print(f"  ⏳ Video {video_id} still processing ({elapsed:.1f} min elapsed)…")
+                        time.sleep(poll_interval_seconds)
+                        continue
+                    
+                    # Processing complete — check for restrictions
+                    break
+                
+                # If still not processed after max wait, skip to next cycle
+                if upload_status in ("uploaded", ""):
+                    print(f"  ⏳ Video {video_id} still processing after {max_wait_minutes} min — will check next cycle")
+                    continue
+                
+                # Now check for restrictions
                 resp = self.yt.videos().list(
                     part="status,contentDetails",
                     id=video_id,
@@ -410,11 +450,6 @@ class YouTubeUploader:
                 upload_status    = status.get("uploadStatus", "")
                 privacy_status   = status.get("privacyStatus", "public")
                 rejection_reason = status.get("rejectionReason", "")
-
-                # YouTube hasn't finished processing yet — wait for next cycle
-                if upload_status in ("uploaded", ""):
-                    print(f"  ⏳ Video {video_id} still processing — will check next cycle")
-                    continue
 
                 # Content ID regional block (shows as "Partially blocked" in Studio)
                 region_restriction = item.get("contentDetails", {}).get("regionRestriction", {})
