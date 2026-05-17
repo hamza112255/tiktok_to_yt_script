@@ -83,7 +83,22 @@ SNAPCHAT_STORY_URLS = []
 
 # ENABLED - TikTok accounts (ACTIVE)
 TIKTOK_ACCOUNTS = [
-    "lahoritwins",
+    "raajabbutt1",
+    "rajabsfamily2",
+    "buttisback0.07",
+    "i.haiderr",
+    "shahbazbukhari145",
+    "maandogardogarisback",
+    "nadeemmubarakofficial",
+    "musakhann1003",
+    "man.dogar6",
+    "haider.shah1400",
+    "jahangirbutt914",
+    "rajab14family512",
+    "buttisback.007",
+    "rajabfamily_5567",
+    "rajabbutt.brand",
+    "rajabbutt.7007",
 ]
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -475,28 +490,20 @@ class YouTubeUploader:
             # After 5 minutes of polling, if no copyright detected, publish as public
             print(f"  ✓ No copyright detected after {copyright_wait_minutes} min — publishing public")
             
-            # Now check for restrictions one final time before publishing
+            # Make it public
+            try:
+                self.yt.videos().update(
+                    part="status",
+                    body={"id": video_id, "status": {"privacyStatus": "public"}},
+                ).execute()
+                print(f"  ✓ Video {video_id} — clean, published public")
+            except Exception as e:
+                print(f"  ✗ Could not publish {video_id}: {e}")
             
-            # Now check for restrictions
-            resp = self.yt.videos().list(
-                part="status,contentDetails",
-                id=video_id,
-            ).execute()
-
-            items = resp.get("items", [])
-            if not items:
-                return
-
-            item             = items[0]
-            status           = item.get("status", {})
-            upload_status    = status.get("uploadStatus", "")
-            privacy_status   = status.get("privacyStatus", "public")
-            rejection_reason = status.get("rejectionReason", "")
-
-            # Content ID regional block (shows as "Partially blocked" in Studio)
-            region_restriction = item.get("contentDetails", {}).get("regionRestriction", {})
-            blocked_regions    = region_restriction.get("blocked", [])
-            allowed_regions    = region_restriction.get("allowed", [])
+            # Remove from tracking
+            data = self._load_uploaded_ids()
+            data.pop(video_id, None)
+            self._UPLOADED_FILE.write_text(json.dumps(data), encoding="utf-8")
 
             is_restricted = False
             reason        = ""
