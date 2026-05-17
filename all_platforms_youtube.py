@@ -370,10 +370,10 @@ class YouTubeUploader:
         try:
             # Poll until video is processed (max 20 minutes)
             max_wait_minutes = 20
-            poll_interval_seconds = 10
+            poll_interval_seconds = 30
             upload_status = ""
             
-            print(f"  ⏳ Checking video {video_id} for copyright (polling every 10s)…")
+            print(f"  ⏳ Checking video {video_id} for copyright (polling every 30s)…")
             upload_time = datetime.now()
             
             for attempt in range(int(max_wait_minutes * 60 / poll_interval_seconds)):
@@ -400,7 +400,7 @@ class YouTubeUploader:
                     time.sleep(poll_interval_seconds)
                     continue
                 
-                # Processing complete — break and wait additional time for copyright scan
+                # Processing complete — break and check for copyright
                 break
             
             # If still not processed after max wait, skip
@@ -408,9 +408,74 @@ class YouTubeUploader:
                 print(f"  ⏳ Video {video_id} still processing after {max_wait_minutes} min — will check later")
                 return
             
-            # Video is processed - now wait 3 minutes for YouTube's copyright scan to complete
-            print(f"  ✓ Video processed — waiting 3 minutes for copyright scan…")
-            time.sleep(180)  # 3 minutes for copyright detection
+            # Video is processed - now poll for copyright detection (max 5 minutes)
+            print(f"  ✓ Video processed — checking for copyright claims…")
+            copyright_wait_minutes = 5
+            
+            for attempt in range(int(copyright_wait_minutes * 60 / poll_interval_seconds)):
+                time.sleep(poll_interval_seconds)
+                
+                resp = self.yt.videos().list(
+                    part="status,contentDetails",
+                    id=video_id,
+                ).execute()
+
+                items = resp.get("items", [])
+                if not items:
+                    print(f"  ⚠ Video {video_id} not found")
+                    return
+
+                item             = items[0]
+                status           = item.get("status", {})
+                upload_status    = status.get("uploadStatus", "")
+                privacy_status   = status.get("privacyStatus", "public")
+                rejection_reason = status.get("rejectionReason", "")
+
+                # Content ID regional block (shows as "Partially blocked" in Studio)
+                region_restriction = item.get("contentDetails", {}).get("regionRestriction", {})
+                blocked_regions    = region_restriction.get("blocked", [])
+                allowed_regions    = region_restriction.get("allowed", [])
+
+                is_restricted = False
+                reason        = ""
+
+                if upload_status in ("rejected", "failed"):
+                    is_restricted = True
+                    reason = f"uploadStatus={upload_status}" + (
+                        f", reason={rejection_reason}" if rejection_reason else ""
+                    )
+                elif upload_status == "processed" and privacy_status not in ("public", "private"):
+                    # YouTube changed privacy away from our private setting — copyright takedown
+                    is_restricted = True
+                    reason = f"privacyStatus changed to '{privacy_status}'"
+                elif blocked_regions:
+                    is_restricted = True
+                    reason = f"Content ID claim — blocked in {len(blocked_regions)} region(s)"
+                elif 0 < len(allowed_regions) < 10:
+                    is_restricted = True
+                    reason = f"Content ID claim — only allowed in {len(allowed_regions)} region(s)"
+
+                if is_restricted:
+                    print(f"  ⚠ Video {video_id} restricted ({reason}) — deleting from YouTube")
+                    try:
+                        self.yt.videos().delete(id=video_id).execute()
+                        print(f"  ✓ Deleted restricted video: {video_id}")
+                    except Exception as e:
+                        print(f"  ✗ Could not delete {video_id}: {e}")
+                    # Remove from tracking and exit
+                    data = self._load_uploaded_ids()
+                    data.pop(video_id, None)
+                    self._UPLOADED_FILE.write_text(json.dumps(data), encoding="utf-8")
+                    return
+                
+                # If no copyright detected yet, continue polling
+                elapsed = (datetime.now() - upload_time).total_seconds()
+                print(f"  ⏳ No copyright detected yet… ({int(elapsed)}s total)")
+            
+            # After 5 minutes of polling, if no copyright detected, publish as public
+            print(f"  ✓ No copyright detected after {copyright_wait_minutes} min — publishing public")
+            
+            # Now check for restrictions one final time before publishing
             
             # Now check for restrictions
             resp = self.yt.videos().list(
