@@ -609,16 +609,34 @@ class YouTubeUploader:
                 "snippet": {
                     "title":       clean_title[:100],
                     "description": description[:5000],
-                    "tags":        ["shorts", "viral", "pakistan", "lahoritwins"],
+                    "tags":        [
+                        "rajabbutt", "rajabfamily", "maandogar", "shazi", 
+                        "haidershah", "haiderlive", "jahangir", "musa",
+                        "trendingshorts", "lahoritwins", "viralshorts",
+                        "fyp", "foryou", "trending", "rajabvlogs", "shorts"
+                    ],
                     "categoryId":  "24",  # Entertainment
+                    "defaultLanguage": "ur",  # Urdu
+                    "defaultAudioLanguage": "ur",
                 },
                 "status": {
                     "privacyStatus":           "private",
                     "selfDeclaredMadeForKids": False,
                 },
+                "recordingDetails": {
+                    "location": {
+                        "latitude": 31.5204,  # Lahore, Pakistan
+                        "longitude": 74.3587,
+                    },
+                    "locationDescription": "Pakistan"
+                }
             }
             media   = MediaFileUpload(str(video_path), chunksize=-1, resumable=True)
-            request = self.yt.videos().insert(part="snippet,status", body=body, media_body=media)
+            request = self.yt.videos().insert(
+                part="snippet,status,recordingDetails", 
+                body=body, 
+                media_body=media
+            )
 
             response = None
             while response is None:
