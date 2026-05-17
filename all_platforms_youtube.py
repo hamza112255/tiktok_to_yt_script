@@ -362,6 +362,122 @@ class YouTubeUploader:
         data[video_id] = datetime.now().isoformat()
         self._UPLOADED_FILE.write_text(json.dumps(data), encoding="utf-8")
 
+    def _check_single_video(self, video_id: str) -> None:
+        """Check a single video for restrictions and delete/publish accordingly."""
+        if not self.enabled:
+            return
+        
+        try:
+            # Poll until video is processed (max 20 minutes)
+            max_wait_minutes = 20
+            poll_interval_seconds = 45
+            upload_status = ""
+            
+            print(f"  ⏳ Waiting for video {video_id} to finish processing…")
+            upload_time = datetime.now()
+            
+            for attempt in range(int(max_wait_minutes * 60 / poll_interval_seconds)):
+                resp = self.yt.videos().list(
+                    part="status,contentDetails",
+                    id=video_id,
+                ).execute()
+
+                items = resp.get("items", [])
+                if not items:
+                    print(f"  ⚠ Video {video_id} not found")
+                    return
+
+                item             = items[0]
+                status           = item.get("status", {})
+                upload_status    = status.get("uploadStatus", "")
+                privacy_status   = status.get("privacyStatus", "public")
+                rejection_reason = status.get("rejectionReason", "")
+
+                # YouTube hasn't finished processing yet — wait and retry
+                if upload_status in ("uploaded", ""):
+                    elapsed = (datetime.now() - upload_time).total_seconds() / 60
+                    print(f"  ⏳ Video {video_id} still processing ({elapsed:.1f} min elapsed)…")
+                    time.sleep(poll_interval_seconds)
+                    continue
+                
+                # Processing complete — check for restrictions
+                break
+            
+            # If still not processed after max wait, skip
+            if upload_status in ("uploaded", ""):
+                print(f"  ⏳ Video {video_id} still processing after {max_wait_minutes} min — will check later")
+                return
+            
+            # Now check for restrictions
+            resp = self.yt.videos().list(
+                part="status,contentDetails",
+                id=video_id,
+            ).execute()
+
+            items = resp.get("items", [])
+            if not items:
+                return
+
+            item             = items[0]
+            status           = item.get("status", {})
+            upload_status    = status.get("uploadStatus", "")
+            privacy_status   = status.get("privacyStatus", "public")
+            rejection_reason = status.get("rejectionReason", "")
+
+            # Content ID regional block (shows as "Partially blocked" in Studio)
+            region_restriction = item.get("contentDetails", {}).get("regionRestriction", {})
+            blocked_regions    = region_restriction.get("blocked", [])
+            allowed_regions    = region_restriction.get("allowed", [])
+
+            is_restricted = False
+            reason        = ""
+
+            if upload_status in ("rejected", "failed"):
+                is_restricted = True
+                reason = f"uploadStatus={upload_status}" + (
+                    f", reason={rejection_reason}" if rejection_reason else ""
+                )
+            elif upload_status == "processed" and privacy_status not in ("public", "private"):
+                # YouTube changed privacy away from our private setting — copyright takedown
+                is_restricted = True
+                reason = f"privacyStatus changed to '{privacy_status}'"
+            elif blocked_regions:
+                is_restricted = True
+                reason = f"Content ID claim — blocked in {len(blocked_regions)} region(s)"
+            elif 0 < len(allowed_regions) < 10:
+                is_restricted = True
+                reason = f"Content ID claim — only allowed in {len(allowed_regions)} region(s)"
+
+            if is_restricted:
+                print(f"  ⚠ Video {video_id} restricted ({reason}) — deleting from YouTube")
+                try:
+                    self.yt.videos().delete(id=video_id).execute()
+                    print(f"  ✓ Deleted restricted video: {video_id}")
+                except Exception as e:
+                    print(f"  ✗ Could not delete {video_id}: {e}")
+            else:
+                # Clean — make it public now
+                try:
+                    self.yt.videos().update(
+                        part="status",
+                        body={"id": video_id, "status": {"privacyStatus": "public"}},
+                    ).execute()
+                    print(f"  ✓ Video {video_id} — clean, published public")
+                except Exception as e:
+                    print(f"  ✗ Could not publish {video_id}: {e}")
+            
+            # Remove from tracking
+            data = self._load_uploaded_ids()
+            data.pop(video_id, None)
+            self._UPLOADED_FILE.write_text(json.dumps(data), encoding="utf-8")
+
+        except Exception as e:
+            err = str(e)
+            if "insufficientPermissions" in err or "invalid_scope" in err:
+                print("  ⚠ Restriction check needs re-authentication (run authenticate_all_projects.py locally)")
+            else:
+                print(f"  ⚠ Could not check video {video_id}: {e}")
+
     def check_and_remove_restricted(self) -> None:
         """Check recently uploaded videos for YouTube restrictions and auto-delete them."""
         if not self.enabled:
@@ -684,6 +800,12 @@ class YouTubeUploader:
             vid_id = response["id"]
             self._save_uploaded_id(vid_id)
             print(f"  ✓ Uploaded [{self._today_count}/{MAX_UPLOADS_PER_DAY} today] → https://youtube.com/watch?v={vid_id}")
+            
+            # Immediately start checking for copyright (wait 2 min then poll)
+            print(f"  ⏳ Waiting 2 minutes before checking copyright status…")
+            time.sleep(120)  # 2 minute initial buffer
+            self._check_single_video(vid_id)
+            
             return True
 
         except Exception as e:
