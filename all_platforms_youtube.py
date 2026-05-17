@@ -400,13 +400,17 @@ class YouTubeUploader:
                     time.sleep(poll_interval_seconds)
                     continue
                 
-                # Processing complete — check for restrictions
+                # Processing complete — break and wait additional time for copyright scan
                 break
             
             # If still not processed after max wait, skip
             if upload_status in ("uploaded", ""):
                 print(f"  ⏳ Video {video_id} still processing after {max_wait_minutes} min — will check later")
                 return
+            
+            # Video is processed - now wait 3 minutes for YouTube's copyright scan to complete
+            print(f"  ✓ Video processed — waiting 3 minutes for copyright scan…")
+            time.sleep(180)  # 3 minutes for copyright detection
             
             # Now check for restrictions
             resp = self.yt.videos().list(
