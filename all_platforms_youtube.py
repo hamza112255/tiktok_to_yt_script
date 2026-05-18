@@ -85,7 +85,6 @@ SNAPCHAT_STORY_URLS = []
 TIKTOK_ACCOUNTS = [
     "raajabbutt1",
     "rajabsfamily2",
-    "buttisback0.07",
     "i.haiderr",
     "shahbazbukhari145",
     "maandogardogarisback",
